@@ -17,7 +17,7 @@ class ParameterSpec(ty.NamedTuple):
     default: float = 0.0
     min: float = -float("inf")
     max: float = float("inf")
-    share = False
+    share: bool = False
 
 
 class Observable(ty.NamedTuple):
@@ -54,16 +54,25 @@ class Model:
             ]
         )
 
+    def __call__(self, **params):
+        """Return a new model with different defaults"""
+        return self.__class__(name=self.name, **params)
+
     def validate_params(self, params: dict) -> dict:
         if params is None:
             params = dict()
         if not isinstance(params, dict):
             raise ValueError(f"Params must be a dict, got {type(params)}")
+
+        # Set defaults for missing params
         for p in self.param_specs:
             params.setdefault(p.name, p.default)
+
+        # Flag spurious parameters
         spurious = set(params.keys()) - set(self.param_names)
         if spurious:
             raise ValueError(f"Unknown parameters {spurious} passed")
+
         return params
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
@@ -301,6 +310,10 @@ class Mixture(Model):
             ],
             axis=0,
         )
+
+
+# class ScipyStats(Model):
+#     def __init__(self, dist):
 
 
 @export

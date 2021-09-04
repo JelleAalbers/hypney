@@ -1,6 +1,7 @@
-import hypney
-
+import pytest
 import numpy as np
+
+import hypney
 
 
 def test_uniform():
@@ -8,22 +9,33 @@ def test_uniform():
     assert m.expected_count() == 0.0
     assert m.expected_count(params=dict(expected_events=100.0)) == 100.0
 
+    # Test simulate
     data = m.simulate()
     assert data.shape == (0, 1)
     data = m.simulate_n(5)
     assert data.shape == (5, 1)
 
+    # Test different data formats and pdf
     assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
     assert m.pdf(0) == 1.0
 
+    # Test cdf
     assert np.all(m.cdf([0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
+    # Test diff rate
     assert m.diff_rate(0.0) == 0.0
 
+    # Test setting params on init
     m = hypney.Uniform(expected_events=100)
     assert m.expected_count() == 100.0
     assert m.simulate().shape[0] > 0
 
+    # Test making models with new defaults
+    m2 = m(expected_events=50)
+    assert m2 != m
+    assert m2.expected_count() == 50.0
+
+    # Test expected_count
     assert m.expected_count(cut=(0, 0.5)) == 50.0
 
 
