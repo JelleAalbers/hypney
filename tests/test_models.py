@@ -30,6 +30,7 @@ def test_uniform():
 def test_mixture():
     m1 = hypney.Uniform(expected_events=40)
     m2 = hypney.Uniform(expected_events=20)
+    m3 = hypney.Uniform(expected_events=30)
 
     mix = hypney.Mixture(m1, m2)
     assert mix.param_names == ("m0_expected_events", "m1_expected_events")
@@ -39,10 +40,20 @@ def test_mixture():
 
     assert mix.pdf(0) == 1.0
 
-    assert mix.diff_rate(0) == 60.
+    assert mix.diff_rate(0) == 60.0
 
     assert np.all(mix.cdf([0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
     assert mix.simulate().shape[0] > 0
+
+    # Test forming mixtures by +
+    mix2 = m1 + m2
+    assert mix2.diff_rate(0) == 60.0
+
+    mix3 = m3 + mix2
+    assert mix3.diff_rate(0) == 90.0
+    assert len(mix3.models) == 3, "Should unpack mixtures"
+    mix4 = m1 + m2 + m3
+    assert mix4.diff_rate(0) == 90.0
 
     # TODO: Test parameter sharing

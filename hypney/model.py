@@ -38,11 +38,12 @@ class Model:
     def param_names(self):
         return tuple([p.name for p in self.param_specs])
 
-    def __init__(self, name="", param_specs=None, **params):
+    @property
+    def n_dim(self):
+        return len(self.observables)
+
+    def __init__(self, name="", **params):
         self.name = name
-        if param_specs:
-            # Hmmm :-()
-            self.param_specs = param_specs
 
         # TODO: should we store defaults separately? might be easier...
         params = self.validate_params(params)
@@ -77,11 +78,10 @@ class Model:
         if len(data.shape) == 1:
             data = data[:, None]
 
-        expected_dim = len(self.observables)
         observed_dim = data.shape[1]
-        if expected_dim != observed_dim:
+        if self.n_dim != observed_dim:
             raise ValueError(
-                f"Data should have {expected_dim} observables per event, got {observed_dim}"
+                f"Data should have {self.n_dim} observables per event, got {observed_dim}"
             )
         return data
 
@@ -169,6 +169,9 @@ class Model:
         )
         return np.sum(np.array(signs) * self.cdf(points, params))
 
+    def __add__(self, other):
+        return Mixture(self, other)
+
 
 @export
 class Mixture(Model):
@@ -182,21 +185,40 @@ class Mixture(Model):
     def __init__(self, *models):
         assert len(models) > 1
 
-        # TODO: allow this, but extend domain?
-        assert all(
-            [m.observables == models[0].observables for m in models]
-        ), "Inconsistent domains"
+        # If any of the models are mixtures, grab underlying models
+        _models = []
+        for m in models:
+            if isinstance(m, Mixture):
+                _models.extend(m.models)
+            else:
+                _models.append(m)
+        models = _models
 
         self.models = tuple(models)
-        self.model_names = [
-            m.name if m.name else f"m{i}" for i, m in enumerate(models)
-        ]
+        self.model_names = [m.name if m.name else f"m{i}" for i, m in enumerate(models)]
 
+        # Construct new domain / support / observables.
+        assert all(
+            [m.n_dim == models[0].n_dim for m in models]
+        ), "Can't mix models of different dimensionality"
+        new_obs = []
+        for obs_i in range(models[0].n_dim):
+            obs_0 = models[0].observables[obs_i]
+            assert all(
+                [m.observables[obs_i].name == obs_0.name for m in models]
+            ), "Can't mix models with different observable names"
+            new_min = min([m.observables[obs_i].min for m in models])
+            new_max = max([m.observables[obs_i].max for m in models])
+            new_obs.append(Observable(name=obs_0.name, min=new_min, max=new_max))
+        self.observables = tuple(new_obs)
+
+        # Construct parameter spec of mixture.
+        # Clashing unshared parameter names are renamed modelname_paramname.
+        # For shared params, defaults and bounds are taken from
+        # the earliest model in the mixture.
         all_names = sum([list(m.param_names) for m in models], [])
-
         name_count = collections.Counter(all_names)
         unique = [pn for pn, count in name_count.items() if count == 1]
-
         specs = []
         pmap = dict()
         seen = []
@@ -217,7 +239,9 @@ class Mixture(Model):
                         )
                     )
         self.param_mapping = pmap
-        super().__init__(param_specs=tuple(specs))
+        self.param_specs = tuple(specs)
+
+        super().__init__()
 
     def iter_models_params(self, params):
         for m, param_map in zip(self.models, self.param_mapping.values()):
