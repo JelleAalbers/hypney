@@ -1,3 +1,4 @@
+import collections
 import itertools
 import typing as ty
 
@@ -16,6 +17,7 @@ class ParameterSpec(ty.NamedTuple):
     default: float = 0.0
     min: float = -float("inf")
     max: float = float("inf")
+    share = False
 
 
 class Observable(ty.NamedTuple):
@@ -28,6 +30,7 @@ class Observable(ty.NamedTuple):
 
 @export
 class Model:
+    name: str = ""
     param_specs: ty.Tuple[ParameterSpec]
     observables: ty.Tuple[Observable]
 
@@ -35,7 +38,13 @@ class Model:
     def param_names(self):
         return tuple([p.name for p in self.param_specs])
 
-    def __init__(self, **params):
+    def __init__(self, name="", param_specs=None, **params):
+        self.name = name
+        if param_specs:
+            # Hmmm :-()
+            self.param_specs = param_specs
+
+        # TODO: should we store defaults separately? might be easier...
         params = self.validate_params(params)
         self.param_specs = tuple(
             [
@@ -47,6 +56,8 @@ class Model:
     def validate_params(self, params: dict) -> dict:
         if params is None:
             params = dict()
+        if not isinstance(params, dict):
+            raise ValueError(f"Params must be a dict, got {type(params)}")
         for p in self.param_specs:
             params.setdefault(p.name, p.default)
         spurious = set(params.keys()) - set(self.param_names)
@@ -64,13 +75,13 @@ class Model:
         if isinstance(data, (list, tuple)):
             data = np.asarray(data)
         if len(data.shape) == 1:
-            data = data[None, :]
+            data = data[:, None]
 
         expected_dim = len(self.observables)
         observed_dim = data.shape[1]
         if expected_dim != observed_dim:
             raise ValueError(
-                "Data should have {expected_dim} observables per event, got {observed_dim}"
+                f"Data should have {expected_dim} observables per event, got {observed_dim}"
             )
         return data
 
@@ -113,7 +124,9 @@ class Model:
 
         return events
 
-    def diff_rate(self, data: np.ndarray, params=None, *, cut=None) -> np.ndarray:
+    def diff_rate(
+        self, data: np.ndarray, params: dict = None, *, cut=None
+    ) -> np.ndarray:
         params = self.validate_params(params)
         data = self.validate_data(data)
         return self.pdf(data, params) * self.expected_count(params, cut=cut)
@@ -131,7 +144,7 @@ class Model:
         params = self.validate_params(params)
         raise NotImplementedError
 
-    def cut_efficiency(self, params: dict = None, cut=None):
+    def cut_efficiency(self, cut, params: dict = None):
         params = self.validate_params(params)
         cut = self.validate_cut(cut)
         if cut is None:
@@ -158,13 +171,122 @@ class Model:
 
 
 @export
+class Mixture(Model):
+    models: ty.Tuple[Model]
+    model_names: ty.Tuple[str]
+    weights: np.ndarray
+
+    # param_mapping   (mname -> (pname in model, pname in mixture))
+    param_mapping: ty.Dict[str, ty.Tuple[str, str]]
+
+    def __init__(self, *models):
+        assert len(models) > 1
+
+        # TODO: allow this, but extend domain?
+        assert all(
+            [m.observables == models[0].observables for m in models]
+        ), "Inconsistent domains"
+
+        self.models = tuple(models)
+        self.model_names = [
+            m.name if m.name else f"m{i}" for i, m in enumerate(models)
+        ]
+
+        all_names = sum([list(m.param_names) for m in models], [])
+
+        name_count = collections.Counter(all_names)
+        unique = [pn for pn, count in name_count.items() if count == 1]
+
+        specs = []
+        pmap = dict()
+        seen = []
+        for m, mname in zip(self.models, self.model_names):
+            pmap[mname] = []
+            for p in m.param_specs:
+                if p.name in unique or p.share:
+                    pmap[mname].append((p.name, p.name))
+                    if p.name not in seen:
+                        specs.append(p)
+                        seen.append(p.name)
+                else:
+                    new_name = mname + "_" + p.name
+                    pmap[mname].append((p.name, new_name))
+                    specs.append(
+                        ParameterSpec(
+                            name=new_name, min=p.min, max=p.max, default=p.default
+                        )
+                    )
+        self.param_mapping = pmap
+        super().__init__(param_specs=tuple(specs))
+
+    def iter_models_params(self, params):
+        for m, param_map in zip(self.models, self.param_mapping.values()):
+            yield m, {
+                pname_in_model: params[pname_in_mixture]
+                for pname_in_model, pname_in_mixture in param_map
+            }
+
+    def expected_count_per_model(self, params: dict = None, *, cut=None) -> np.ndarray:
+        params = self.validate_params(params)
+        return np.array(
+            [m.expected_count(ps, cut=cut) for m, ps in self.iter_models_params(params)]
+        )
+
+    def expected_count(self, params: dict = None, *, cut=None) -> np.ndarray:
+        return sum(self.expected_count_per_model(params, cut=cut))
+
+    def f_per_model(self, params):
+        mus = self.expected_count_per_model(params)
+        return mus / mus.sum()
+
+    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+        params = self.validate_params(params)
+        return np.average(
+            [m.pdf(data, ps) for m, ps in self.iter_models_params(params)],
+            axis=0,
+            weights=self.f_per_model(params),
+        )
+
+    def cdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+        # TODO: check.. and we're duplicating most of pdf...
+        params = self.validate_params(params)
+        return np.average(
+            [m.cdf(data, ps) for m, ps in self.iter_models_params(params)],
+            axis=0,
+            weights=self.f_per_model(params),
+        )
+
+    def diff_rate(
+        self, data: np.ndarray, params: dict = None, *, cut=None
+    ) -> np.ndarray:
+        params = self.validate_params(params)
+        return np.sum(
+            [
+                m.diff_rate(data, ps, cut=cut)
+                for m, ps in self.iter_models_params(params)
+            ],
+            axis=0,
+        )
+
+    def simulate(self, params: dict = None, *, cut=None) -> np.ndarray:
+        params = self.validate_params(params)
+        return np.concatenate(
+            [
+                m.simulate(params=ps, cut=cut)
+                for m, ps in self.iter_models_params(params)
+            ],
+            axis=0,
+        )
+
+
+@export
 class Uniform(Model):
     observables = (Observable("x", 0, 1),)
     param_specs = (ParameterSpec("expected_events", 0),)
 
     def expected_count(self, params: dict = None, *, cut=None) -> np.ndarray:
         params = self.validate_params(params)
-        return self.cut_efficiency(cut) * (params["expected_events"])
+        return self.cut_efficiency(cut, params) * (params["expected_events"])
 
     def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
         params = self.validate_params(params)
@@ -183,5 +305,5 @@ class Uniform(Model):
 
     def cdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
         params = self.validate_params(params)
-        params = self.validate_data(data)
+        data = self.validate_data(data)
         return data[:, 0]
