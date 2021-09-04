@@ -1,3 +1,6 @@
+import pickle
+import tempfile
+
 import numpy as np
 from scipy import stats
 
@@ -41,9 +44,18 @@ def test_uniform():
     assert m.cut_efficiency(cut=(0, 0.5)) == 0.5
     assert m.expected_count(cut=(0, 0.5)) == 50.0
 
+    # Models can be pickled and unpickled
+    m = hypney.Uniform(loc=0.5)
+    with tempfile.NamedTemporaryFile() as tempf:
+        fn = tempf.name
+        with open(fn, mode="wb") as f:
+            pickle.dump(m, f)
+        with open(fn, mode="rb") as f:
+            m = pickle.load(f)
+    assert m.defaults["loc"] == 0.5
 
-def test_scipy_univariate():
 
+def test_beta():
     m = hypney.Beta(a=0.5, b=0.5, expected_events=100)
     data = m.simulate()
     np.testing.assert_equal(m.pdf(data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
