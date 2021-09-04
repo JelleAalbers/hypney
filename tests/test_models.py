@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 
 import hypney
@@ -39,6 +38,26 @@ def test_uniform():
     assert m.expected_count(cut=(0, 0.5)) == 50.0
 
 
+def test_scipy_univariate():
+    from scipy import stats
+
+    m = hypney.ScipyUnivariate(stats.beta, a=0.5, b=0.5, expected_events=100)
+    data = m.simulate()
+    assert m.expected_count() == 100.0
+    assert len(data)
+    assert data.min() > 0
+    assert data.max() < 1
+
+    m2 = m(expected_events=20, loc=-100, scale=10)
+    assert m2.defaults["a"] == 0.5
+    assert m2.expected_count() == 20.0
+    assert m2.dist == m.dist
+    data = m2.simulate()
+    assert len(data)
+    assert data.min() < 0
+    assert (data.max() - data.min()) > 1
+
+
 def test_mixture():
     m1 = hypney.Uniform(expected_events=40)
     m2 = hypney.Uniform(expected_events=20)
@@ -57,6 +76,7 @@ def test_mixture():
     assert np.all(mix.cdf([0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
     assert mix.simulate().shape[0] > 0
+    assert mix.simulate_n(50).shape[0] > 0
 
     # Test forming mixtures by +
     mix2 = m1 + m2

@@ -3,6 +3,7 @@ import itertools
 import typing as ty
 
 import numpy as np
+from scipy import stats
 
 import hypney as hp
 
@@ -20,6 +21,11 @@ class ParameterSpec(ty.NamedTuple):
     share: bool = False
 
 
+DEFAULT_RATE_PARAM = ParameterSpec(
+    name="expected_events", min=0.0, max=float("inf"), default=0
+)
+
+
 class Observable(ty.NamedTuple):
     """Description of a observable space: name and limits"""
 
@@ -31,8 +37,10 @@ class Observable(ty.NamedTuple):
 @export
 class Model:
     name: str = ""
-    param_specs: ty.Tuple[ParameterSpec]
-    observables: ty.Tuple[Observable]
+    param_specs: ty.Tuple[ParameterSpec] = (DEFAULT_RATE_PARAM,)
+    observables: ty.Tuple[Observable] = (
+        Observable(name="x", min=-float("inf"), max=float("inf")),
+    )
 
     @property
     def param_names(self):
@@ -42,10 +50,13 @@ class Model:
     def n_dim(self):
         return len(self.observables)
 
+    @property
+    def defaults(self):
+        return {p.name: p.default for p in self.param_specs}
+
     def __init__(self, name="", **params):
         self.name = name
 
-        # TODO: should we store defaults separately? might be easier...
         params = self.validate_params(params)
         self.param_specs = tuple(
             [
@@ -56,6 +67,7 @@ class Model:
 
     def __call__(self, **params):
         """Return a new model with different defaults"""
+        params = self.validate_params(params)
         return self.__class__(name=self.name, **params)
 
     def validate_params(self, params: dict) -> dict:
@@ -140,19 +152,6 @@ class Model:
         data = self.validate_data(data)
         return self.pdf(data, params) * self.expected_count(params, cut=cut)
 
-    def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
-        params = self.validate_params(params)
-        raise NotImplementedError
-
-    def expected_count(self, params: dict = None, cut=None) -> np.ndarray:
-        params = self.validate_params(params)
-        raise NotImplementedError
-
-    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
-        data = self.validate_data(data)
-        params = self.validate_params(params)
-        raise NotImplementedError
-
     def cut_efficiency(self, cut, params: dict = None):
         params = self.validate_params(params)
         cut = self.validate_cut(cut)
@@ -180,6 +179,21 @@ class Model:
 
     def __add__(self, other):
         return Mixture(self, other)
+
+    # Model should implement one of pdf or diff_rate, else recursion error
+    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+        data = self.validate_data(data)
+        params = self.validate_params(params)
+        return self.diff_rate(data, params) / self.expected_count(params)
+
+    def expected_count(self, params: dict = None, cut=None) -> np.ndarray:
+        params = self.validate_params(params)
+        if cut is not None:
+            raise NotImplementedError
+        return params["expected_events"]
+
+    def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
+        raise NotImplementedError
 
 
 @export
@@ -311,15 +325,23 @@ class Mixture(Model):
             axis=0,
         )
 
-
-# class ScipyStats(Model):
-#     def __init__(self, dist):
+    def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
+        params = self.validate_params(params)
+        if cut is not None:
+            raise NotImplementedError
+        n_from = np.random.multinomial(n, self.f_per_model(params))
+        return np.concatenate(
+            [
+                m.simulate_n(_n, params=ps, cut=cut)
+                for _n, (m, ps) in zip(n_from, self.iter_models_params(params))
+            ]
+        )
 
 
 @export
 class Uniform(Model):
     observables = (Observable("x", 0, 1),)
-    param_specs = (ParameterSpec("expected_events", 0),)
+    param_specs = (DEFAULT_RATE_PARAM,)
 
     def expected_count(self, params: dict = None, *, cut=None) -> np.ndarray:
         params = self.validate_params(params)
@@ -344,3 +366,49 @@ class Uniform(Model):
         params = self.validate_params(params)
         data = self.validate_data(data)
         return data[:, 0]
+
+
+@export
+class ScipyUnivariate(Model):
+    def __init__(self, dist, *args, **params):
+        self.dist = dist
+
+        # Construct appropriate param spec for this distribution.
+        # Assume shape parameters are positive and have default 0...
+        spec = [
+            DEFAULT_RATE_PARAM,
+            ParameterSpec(name="loc", min=-float("inf"), max=float("inf"), default=0),
+            ParameterSpec(name="scale", min=0, max=float("inf"), default=1),
+        ]
+        if dist.shapes:
+            for pname in dist.shapes.split(", "):
+                spec.append(
+                    ParameterSpec(name=pname, min=0, max=float("inf"), default=0)
+                )
+        self.param_specs = tuple(spec)
+
+        super().__init__(*args, **params)
+
+    def __call__(self, **params):
+        """Return a new model with different defaults"""
+        params = self.validate_params(params)
+        return self.__class__(name=self.name, dist=self.dist, **params)
+
+    def dist_params(self, params):
+        return {k: v for k, v in params.items() if k != DEFAULT_RATE_PARAM.name}
+
+    def simulate_n(self, n: int, params: dict = None, cut=None) -> np.ndarray:
+        if cut is not None:
+            raise NotImplementedError
+        params = self.validate_params(params)
+        return self.dist.rvs(size=n, **self.dist_params(params))
+
+    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+        params = self.validate_params(params)
+        data = self.validate_data(data)
+        return self.dist.pdf(data, **self.dist_params(params))
+
+    def cdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+        params = self.validate_params(params)
+        data = self.validate_data(data)
+        return self.dist.cdf(data, **self.dist_params(params))
