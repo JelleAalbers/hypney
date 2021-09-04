@@ -1,14 +1,21 @@
 import numpy as np
+from scipy import stats
 
 import hypney
 
 
 def test_uniform():
     m = hypney.Uniform()
-    assert m.expected_count() == 0.0
+    assert m.expected_count() == hypney.DEFAULT_RATE_PARAM.default
     assert m.expected_count(params=dict(expected_events=100.0)) == 100.0
 
+    # Test setting params on init
+    m = hypney.Uniform(expected_events=100)
+    assert m.expected_count() == 100.0
+    assert m.simulate().shape[0] > 0
+
     # Test simulate
+    m = hypney.Uniform(expected_events=0)
     data = m.simulate()
     assert data.shape == (0, 1)
     data = m.simulate_n(5)
@@ -24,25 +31,22 @@ def test_uniform():
     # Test diff rate
     assert m.diff_rate(0.0) == 0.0
 
-    # Test setting params on init
-    m = hypney.Uniform(expected_events=100)
-    assert m.expected_count() == 100.0
-    assert m.simulate().shape[0] > 0
-
     # Test making models with new defaults
     m2 = m(expected_events=50)
     assert m2 != m
     assert m2.expected_count() == 50.0
 
-    # Test expected_count
+    # Test cut efficiency
+    m = hypney.Uniform(expected_events=100)
+    assert m.cut_efficiency(cut=(0, 0.5)) == 0.5
     assert m.expected_count(cut=(0, 0.5)) == 50.0
 
 
 def test_scipy_univariate():
-    from scipy import stats
 
-    m = hypney.ScipyUnivariate(stats.beta, a=0.5, b=0.5, expected_events=100)
+    m = hypney.Beta(a=0.5, b=0.5, expected_events=100)
     data = m.simulate()
+    np.testing.assert_equal(m.pdf(data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
     assert m.expected_count() == 100.0
     assert len(data)
     assert data.min() > 0
@@ -64,7 +68,8 @@ def test_mixture():
     m3 = hypney.Uniform(expected_events=30)
 
     mix = hypney.Mixture(m1, m2)
-    assert mix.param_names == ("m0_expected_events", "m1_expected_events")
+    # assert mix.param_names == (
+    #     "m0_expected_events", "m0_loc", "m1_expected_events")
 
     assert mix.expected_count() == 60.0
     assert mix.expected_count(params=dict(m0_expected_events=0)) == 20.0
