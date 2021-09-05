@@ -22,9 +22,7 @@ class ParameterSpec(ty.NamedTuple):
     share: bool = False
 
 
-DEFAULT_RATE_PARAM = ParameterSpec(
-    name="expected_events", min=0.0, max=float("inf"), default=10
-)
+DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=10)
 
 
 @export
@@ -117,30 +115,30 @@ class Model:
             raise ValueError("Cut should be a tuple")
         if len(cut) == 2 and len(self.observables) == 1:
             cut = (cut,)
-        if isinstance(cut, tuple) and len(cut) == len(self.observables):
-            if all([len(c) == 2 for c in cut]):
-                return cut
+        if len(cut) != len(self.observables):
+            raise ValueError("Cut should have same length as observables")
+        if any([len(c) != 2 for c in cut]):
             raise ValueError("Cut should be a tuple of 2-tuples")
         return cut
 
     @property
     def simulator_gives_efficiency(self):
         return hasattr(self, "simulate_partially_efficient") and hasattr(
-            self, "expected_count_before_efficiencies"
+            self, "rate_before_efficiencies"
         )
 
     def simulate(self, params: dict = None, *, cut=None) -> np.ndarray:
         params = self.validate_params(params)
 
         if self.simulator_gives_efficiency:
-            mu = self.expected_count_before_efficiencies(params)
+            mu = self.rate_before_efficiencies(params)
             n = np.random.poisson(mu)
             events, p_keep = self.simulate_partially_efficient(n, params, cut=cut)
             events = events[np.random.rand(n) < p_keep]
             return events
 
         else:
-            mu = self.expected_count(params)
+            mu = self.rate(params)
             n = np.random.poisson(mu)
             events = self.simulate_n(n, params, cut=cut)
             assert len(events) == n  # TODO: allow acceptance
@@ -152,7 +150,7 @@ class Model:
     ) -> np.ndarray:
         params = self.validate_params(params)
         data = self.validate_data(data)
-        return self.pdf(data, params) * self.expected_count(params, cut=cut)
+        return self.pdf(data, params) * self.rate(params, cut=cut)
 
     def cut_efficiency(self, cut=None, params: dict = None):
         params = self.validate_params(params)
@@ -186,14 +184,18 @@ class Model:
     def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
         data = self.validate_data(data)
         params = self.validate_params(params)
-        return self.diff_rate(data, params) / self.expected_count(params)
+        return self.diff_rate(data, params) / self.rate(params)
 
-    def expected_count(self, params: dict = None, cut=None) -> np.ndarray:
+    def rate(self, params: dict = None, cut=None) -> np.ndarray:
         params = self.validate_params(params)
-        return params["expected_events"] * self.cut_efficiency(cut, params)
+        return params["rate"] * self.cut_efficiency(cut, params)
 
     def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
         raise NotImplementedError
+
+
+Model.differential_rate = Model.diff_rate
+Model.cut_eff = Model.cut_efficiency
 
 
 @export
@@ -273,17 +275,17 @@ class Mixture(Model):
                 for pname_in_model, pname_in_mixture in param_map
             }
 
-    def expected_count_per_model(self, params: dict = None, *, cut=None) -> np.ndarray:
+    def rate_per_model(self, params: dict = None, *, cut=None) -> np.ndarray:
         params = self.validate_params(params)
         return np.array(
-            [m.expected_count(ps, cut=cut) for m, ps in self.iter_models_params(params)]
+            [m.rate(ps, cut=cut) for m, ps in self.iter_models_params(params)]
         )
 
-    def expected_count(self, params: dict = None, *, cut=None) -> np.ndarray:
-        return sum(self.expected_count_per_model(params, cut=cut))
+    def rate(self, params: dict = None, *, cut=None) -> np.ndarray:
+        return sum(self.rate_per_model(params, cut=cut))
 
     def f_per_model(self, params):
-        mus = self.expected_count_per_model(params)
+        mus = self.rate_per_model(params)
         return mus / mus.sum()
 
     def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
@@ -336,33 +338,3 @@ class Mixture(Model):
                 for _n, (m, ps) in zip(n_from, self.iter_models_params(params))
             ]
         )
-
-
-@export
-class BasicUniform(Model):
-    observables = (Observable("x", 0, 1),)
-    param_specs = (DEFAULT_RATE_PARAM,)
-
-    def expected_count(self, params: dict = None, *, cut=None) -> np.ndarray:
-        params = self.validate_params(params)
-        return self.cut_efficiency(cut, params) * (params["expected_events"])
-
-    def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
-        params = self.validate_params(params)
-        if cut is None:
-            obs = self.observables[0]
-            low, high = obs.min, obs.max
-        else:
-            cut = self.validate_cut(cut)
-            low, high = cut[0]
-        return (low + np.random.rand(n) * (high - low))[:, None]
-
-    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
-        params = self.validate_params(params)
-        data = self.validate_data(data)
-        return np.ones(len(data))
-
-    def cdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
-        params = self.validate_params(params)
-        data = self.validate_data(data)
-        return data[:, 0]
