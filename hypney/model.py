@@ -1,28 +1,12 @@
-import collections
 import itertools
 import typing as ty
 
 import numpy as np
 
-import hypney as hp
+import hypney
 
 
-export, __all__ = hp.exporter()
-__all__.extend(["DEFAULT_RATE_PARAM"])
-
-
-@export
-class ParameterSpec(ty.NamedTuple):
-    """Description of a parameter: name, default, and limits"""
-
-    name: str
-    default: float = 0.0
-    min: float = -float("inf")
-    max: float = float("inf")
-    share: bool = False
-
-
-DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=10)
+export, __all__ = hypney.exporter()
 
 
 @export
@@ -35,24 +19,14 @@ class Observable(ty.NamedTuple):
 
 
 @export
-class Model:
-    name: str = ""
-    param_specs: ty.Tuple[ParameterSpec] = (DEFAULT_RATE_PARAM,)
+class Model(hypney.Element):
     observables: ty.Tuple[Observable] = (
         Observable(name="x", min=-float("inf"), max=float("inf")),
     )
 
     @property
-    def param_names(self):
-        return tuple([p.name for p in self.param_specs])
-
-    @property
     def n_dim(self):
         return len(self.observables)
-
-    @property
-    def defaults(self):
-        return {p.name: p.default for p in self.param_specs}
 
     def __init__(self, name="", **params):
         self.name = name
@@ -60,7 +34,9 @@ class Model:
         params = self.validate_params(params)
         self.param_specs = tuple(
             [
-                ParameterSpec(p.name, default=params[p.name], min=p.min, max=p.max)
+                hypney.ParameterSpec(
+                    p.name, default=params[p.name], min=p.min, max=p.max
+                )
                 for p in self.param_specs
             ]
         )
@@ -69,23 +45,6 @@ class Model:
         """Return a new model with different defaults"""
         params = self.validate_params(params)
         return self.__class__(name=self.name, **params)
-
-    def validate_params(self, params: dict) -> dict:
-        if params is None:
-            params = dict()
-        if not isinstance(params, dict):
-            raise ValueError(f"Params must be a dict, got {type(params)}")
-
-        # Set defaults for missing params
-        for p in self.param_specs:
-            params.setdefault(p.name, p.default)
-
-        # Flag spurious parameters
-        spurious = set(params.keys()) - set(self.param_names)
-        if spurious:
-            raise ValueError(f"Unknown parameters {spurious} passed")
-
-        return params
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
         # Shorthand data specifications
@@ -140,10 +99,11 @@ class Model:
         else:
             mu = self.rate(params)
             n = np.random.poisson(mu)
-            events = self.simulate_n(n, params, cut=cut)
-            assert len(events) == n  # TODO: allow acceptance
+            data = self.simulate_n(n, params)
+            assert len(data) == n
+            data = self.cut(data, cut)
 
-        return events
+        return data
 
     def diff_rate(
         self, data: np.ndarray, params: dict = None, *, cut=None
@@ -151,6 +111,16 @@ class Model:
         params = self.validate_params(params)
         data = self.validate_data(data)
         return self.pdf(data, params) * self.rate(params, cut=cut)
+
+    def cut(self, data, cut=None):
+        cut = self.validate_cut(cut)
+        data = self.validate_data(data)
+        if cut is None:
+            return data
+        passed = np.ones(len(data), np.bool_)
+        for dim_i, (l, r) in enumerate(cut):
+            passed *= (l <= data[:, dim_i]) & (data[:, dim_i] < r)
+        return data[passed]
 
     def cut_efficiency(self, cut=None, params: dict = None):
         params = self.validate_params(params)
@@ -190,7 +160,7 @@ class Model:
         params = self.validate_params(params)
         return params["rate"] * self.cut_efficiency(cut, params)
 
-    def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
+    def simulate_n(self, n: int, params: dict = None) -> np.ndarray:
         raise NotImplementedError
 
 
@@ -237,34 +207,9 @@ class Mixture(Model):
             new_obs.append(Observable(name=obs_0.name, min=new_min, max=new_max))
         self.observables = tuple(new_obs)
 
-        # Construct parameter spec of mixture.
-        # Clashing unshared parameter names are renamed modelname_paramname.
-        # For shared params, defaults and bounds are taken from
-        # the earliest model in the mixture.
-        all_names = sum([list(m.param_names) for m in models], [])
-        name_count = collections.Counter(all_names)
-        unique = [pn for pn, count in name_count.items() if count == 1]
-        specs = []
-        pmap = dict()
-        seen = []
-        for m, mname in zip(self.models, self.model_names):
-            pmap[mname] = []
-            for p in m.param_specs:
-                if p.name in unique or p.share:
-                    pmap[mname].append((p.name, p.name))
-                    if p.name not in seen:
-                        specs.append(p)
-                        seen.append(p.name)
-                else:
-                    new_name = mname + "_" + p.name
-                    pmap[mname].append((p.name, new_name))
-                    specs.append(
-                        ParameterSpec(
-                            name=new_name, min=p.min, max=p.max, default=p.default
-                        )
-                    )
-        self.param_mapping = pmap
-        self.param_specs = tuple(specs)
+        self.param_specs, self.param_mapping = hypney.combine_param_specs(
+            models, self.model_names
+        )
 
         super().__init__(name="mix_" + "_".join(self.model_names))
 
@@ -327,14 +272,12 @@ class Mixture(Model):
             axis=0,
         )
 
-    def simulate_n(self, n: int, params: dict = None, *, cut=None) -> np.ndarray:
+    def simulate_n(self, n: int, params: dict = None) -> np.ndarray:
         params = self.validate_params(params)
-        if cut is not None:
-            raise NotImplementedError
         n_from = np.random.multinomial(n, self.f_per_model(params))
         return np.concatenate(
             [
-                m.simulate_n(_n, params=ps, cut=cut)
+                m.simulate_n(_n, params=ps)
                 for _n, (m, ps) in zip(n_from, self.iter_models_params(params))
             ]
         )
