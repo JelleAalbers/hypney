@@ -21,7 +21,7 @@ def test_uniform():
     m = hypney.Uniform(rate=0)
     data = m.simulate()
     assert data.shape == (0, 1)
-    data = m.simulate_n(5)
+    data = m.rvs(5)
     assert data.shape == (5, 1)
 
     # Test different data formats and pdf
@@ -93,7 +93,7 @@ def test_mixture():
     assert np.all(mix.cdf([0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
     assert mix.simulate().shape[0] > 0
-    assert mix.simulate_n(50).shape[0] > 0
+    assert mix.rvs(50).shape[0] > 0
 
     # Test forming mixtures by +
     mix2 = m1 + m2

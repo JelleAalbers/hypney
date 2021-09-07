@@ -10,7 +10,7 @@ class ScipyUnivariate(hypney.Model):
     def dist_params(self, params):
         return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
 
-    def simulate_n(self, n: int, params: dict = None) -> np.ndarray:
+    def rvs(self, n: int, params: dict = None) -> np.ndarray:
         params = self.validate_params(params)
         return self.dist.rvs(size=n, **self.dist_params(params))[:, None]
 
