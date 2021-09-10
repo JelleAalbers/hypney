@@ -6,7 +6,7 @@ import numpy as np
 
 import hypney
 
-export, __all__ = hypney.exporter()
+export, __all__ = hypney.exporter(also_export=("DEFAULT_OBSERVABLE",))
 
 
 @export
@@ -16,14 +16,17 @@ class Observable(ty.NamedTuple):
     name: str
     min: float = -float("inf")
     max: float = float("inf")
+    # Whether only integer values are allowed
+    integer: bool = False
+
+
+DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
 
 
 @export
-class Model(hypney.Element):
+class Model(hypney.ParamContainer):
 
-    observables: ty.Tuple[Observable] = (
-        Observable(name="x", min=-float("inf"), max=float("inf")),
-    )
+    observables: ty.Tuple[Observable] = (DEFAULT_OBSERVABLE,)
 
     @property
     def n_dim(self):

@@ -22,7 +22,7 @@ DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), defau
 
 
 @export
-class Element:
+class ParamContainer:
     name: str = ""
     param_specs: ty.Tuple[ParameterSpec] = (DEFAULT_RATE_PARAM,)
 
