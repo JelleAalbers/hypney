@@ -1,7 +1,9 @@
-import hypney
+import typing as ty
 
 import numpy as np
 from scipy import stats
+
+import hypney
 
 export, __all__ = hypney.exporter()
 
@@ -14,6 +16,7 @@ standard_param_specs = (
 
 
 class ScipyUnivariate(hypney.Model):
+    dist: ty.Union[stats.rv_continuous, stats.rv_discrete]
     param_specs = standard_param_specs
 
     def dist_params(self, params):
@@ -23,16 +26,12 @@ class ScipyUnivariate(hypney.Model):
         params = self.validate_params(params)
         return self.dist.rvs(size=n, **self.dist_params(params))[:, None]
 
-    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
-        params = self.validate_params(params)
-        data = self.validate_data(data)
+    def _pdf(self, params: dict = None) -> np.ndarray:
         pdf = self.dist.pdf if hasattr(self.dist, "pdf") else self.dist.pmf
-        return pdf(data[:, 0], **self.dist_params(params))
+        return pdf(self.data[:, 0], **self.dist_params(params))
 
-    def cdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
-        params = self.validate_params(params)
-        data = self.validate_data(data)
-        return self.dist.cdf(data[:, 0], **self.dist_params(params))
+    def _cdf(self, params: dict = None) -> np.ndarray:
+        return self.dist.cdf(self.data[:, 0], **self.dist_params(params))
 
 
 @export

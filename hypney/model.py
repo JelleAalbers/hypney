@@ -24,7 +24,7 @@ DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
 
 
 @export
-class Model(hypney.ParamContainer):
+class Model(hypney.Element):
 
     observables: ty.Tuple[Observable] = (DEFAULT_OBSERVABLE,)
 
@@ -32,26 +32,29 @@ class Model(hypney.ParamContainer):
     def n_dim(self):
         return len(self.observables)
 
-    def __init__(self, name="", **params):
+    # Initialization
+
+    def __init__(self, name="", data=None, params=None, observables=None, **new_defaults):
         self.name = name
-        self._set_defaults(params)
+        if params is not None:
+            self.param_specs = params
+        if observables is not None:
+            self.observables = observables
+        self._set_defaults(new_defaults)
+        self._set_data(data)
 
-    def _set_defaults(self, params):
-        params = self.validate_params(params)
-        self.param_specs = tuple(
-            [
-                hypney.ParameterSpec(
-                    p.name, default=params[p.name], min=p.min, max=p.max
-                )
-                for p in self.param_specs
-            ]
-        )
-
-    def __call__(self, **params):
-        """Return a new model with different parameter defaults"""
+    def __call__(self, name=None, data=None, **new_defaults):
+        """Return a model with possibly changed name, defaults, or data"""
+        if name is None and data is None and not new_defaults:
+            return self
         new_self = copy(self)
-        new_self._set_defaults(params)
+        if name is not None:
+            new_self.name = name
+        new_self._set_defaults(new_defaults)
+        new_self._set_data(data)
         return new_self
+
+    # Validation
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
         # Shorthand data specifications
@@ -112,22 +115,56 @@ class Model(hypney.ParamContainer):
 
         return data
 
+    # Methods taking data
+    # _ methods do not take data
+
     def diff_rate(
-        self, data: np.ndarray, params: dict = None, *, cut=None
+        self, params: dict = None, data: np.ndarray = None, *, cut=None
     ) -> np.ndarray:
         params = self.validate_params(params)
-        data = self.validate_data(data)
-        return self.pdf(data, params) * self.rate(params, cut=cut)
+        return self(data=data)._diff_rate(params, cut=cut)
 
-    def cut(self, data, cut=None):
+    def _diff_rate(self, params: dict, cut=None):
+       return self._pdf(params=params) * self.rate(params, cut=cut)
+
+    def cut(self, data=None, cut=None):
         cut = self.validate_cut(cut)
-        data = self.validate_data(data)
+        return self(data=data)._cut(cut=cut)
+
+    def _cut(self, cut):
         if cut is None:
-            return data
-        passed = np.ones(len(data), np.bool_)
+            return self.data
+        passed = np.ones(len(self.data), np.bool_)
         for dim_i, (l, r) in enumerate(cut):
-            passed *= (l <= data[:, dim_i]) & (data[:, dim_i] < r)
-        return data[passed]
+            passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
+        return self.data[passed]
+
+    def pdf(self, params: dict = None, data: np.ndarray=None) -> np.ndarray:
+        params = self.validate_params(params)
+        return self(data=data)._pdf(params)
+
+    def _pdf(self, params: dict):
+        if self.__class__._diff_rate is Model._diff_rate:
+            raise NotImplementedError(
+                "Can't compute pdf of a Model implementing "
+                "neither _pdf nor _diff_rate")
+        return self._diff_rate(self.data, params) / self.rate(params)
+
+    def cdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
+        params = self.validate_params(params)
+        return self(data=data)._cdf(params)
+
+    def _cdf(self, params: dict):
+        raise NotImplementedError
+
+    # Methods not taking data
+
+    def rate(self, params: dict = None, cut=None) -> np.ndarray:
+        params = self.validate_params(params)
+        return params["rate"] * self.cut_efficiency(cut, params)
+
+    def rvs(self, n: int, params: dict = None) -> np.ndarray:
+        raise NotImplementedError
 
     def cut_efficiency(self, cut=None, params: dict = None):
         params = self.validate_params(params)
@@ -152,24 +189,7 @@ class Model(hypney.ParamContainer):
                 )
             ]
         )
-        return np.sum(np.array(signs) * self.cdf(points, params))
+        return np.sum(np.array(signs) * self.cdf(params=params, data=points))
 
     def __add__(self, other):
         return hypney.Mixture(self, other)
-
-    # Model should implement one of pdf or diff_rate, else recursion error
-    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
-        data = self.validate_data(data)
-        params = self.validate_params(params)
-        return self.diff_rate(data, params) / self.rate(params)
-
-    def rate(self, params: dict = None, cut=None) -> np.ndarray:
-        params = self.validate_params(params)
-        return params["rate"] * self.cut_efficiency(cut, params)
-
-    def rvs(self, n: int, params: dict = None) -> np.ndarray:
-        raise NotImplementedError
-
-
-Model.differential_rate = Model.diff_rate
-Model.cut_eff = Model.cut_efficiency

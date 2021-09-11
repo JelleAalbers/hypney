@@ -72,30 +72,30 @@ class Mixture(hypney.Model):
         mus = self.rate_per_model(params)
         return mus / mus.sum()
 
-    def pdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+    def pdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
         params = self.validate_params(params)
         return np.average(
-            [m.pdf(data, ps) for m, ps in self.iter_models_params(params)],
+            [m.pdf(params=ps, data=data) for m, ps in self.iter_models_params(params)],
             axis=0,
             weights=self.f_per_model(params),
         )
 
-    def cdf(self, data: np.ndarray, params: dict = None) -> np.ndarray:
+    def cdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
         # TODO: check.. and we're duplicating most of pdf...
         params = self.validate_params(params)
         return np.average(
-            [m.cdf(data, ps) for m, ps in self.iter_models_params(params)],
+            [m.cdf(params=ps, data=data) for m, ps in self.iter_models_params(params)],
             axis=0,
             weights=self.f_per_model(params),
         )
 
     def diff_rate(
-        self, data: np.ndarray, params: dict = None, *, cut=None
+        self, params: dict = None, data: np.ndarray = None, *, cut=None
     ) -> np.ndarray:
         params = self.validate_params(params)
         return np.sum(
             [
-                m.diff_rate(data, ps, cut=cut)
+                m.diff_rate(params=ps, data=data, cut=cut)
                 for m, ps in self.iter_models_params(params)
             ],
             axis=0,

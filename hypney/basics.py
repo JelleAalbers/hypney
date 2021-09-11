@@ -1,6 +1,8 @@
 import collections
 import typing as ty
 
+import numpy as np
+
 import hypney as hp
 
 
@@ -16,15 +18,17 @@ class ParameterSpec(ty.NamedTuple):
     min: float = -float("inf")
     max: float = float("inf")
     share: bool = False  # Should param be shared when building mixtures?
+    anchors: tuple = tuple()  # Values at which model is most accurate
 
 
 DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=10)
 
 
 @export
-class ParamContainer:
+class Element:
     name: str = ""
     param_specs: ty.Tuple[ParameterSpec] = (DEFAULT_RATE_PARAM,)
+    data: np.ndarray = None
 
     @property
     def param_names(self):
@@ -33,6 +37,23 @@ class ParamContainer:
     @property
     def defaults(self):
         return {p.name: p.default for p in self.param_specs}
+
+    def _set_data(self, data=None):
+        if data is None:
+            return
+
+        data = self.validate_data(data)
+        self.data = data
+        self.init_data()
+
+    def _set_defaults(self, new_defaults: dict):
+        new_defaults = self.validate_params(new_defaults)
+        self.param_specs = tuple(
+            [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
+        )
+
+    def init_data(self):
+        pass
 
     def validate_params(self, params: dict) -> dict:
         if params is None:

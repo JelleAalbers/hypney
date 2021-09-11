@@ -25,14 +25,14 @@ def test_uniform():
     assert data.shape == (5, 1)
 
     # Test different data formats and pdf
-    assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
-    assert m.pdf(0) == 1.0
+    assert m.pdf(data=0) == m.pdf(data=[0]) == m.pdf(data=np.array([0])) == m.pdf(data=np.array([[0]]))
+    assert m.pdf(data=0) == 1.0
 
     # Test cdf
-    assert np.all(m.cdf([0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
+    assert np.all(m.cdf(data=[0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
     # Test diff rate
-    assert m.diff_rate(0.0) == 0.0
+    assert m.diff_rate(data=0.0) == 0.0
 
     # Test making models with new defaults
     m2 = m(rate=50)
@@ -58,7 +58,7 @@ def test_uniform():
 def test_beta():
     m = hypney.Beta(a=0.5, b=0.5, rate=100)
     data = m.simulate()
-    np.testing.assert_equal(m.pdf(data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
+    np.testing.assert_equal(m.pdf(data=data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
     assert m.rate() == 100.0
     assert len(data)
     assert data.min() > 0
@@ -77,7 +77,7 @@ def test_beta():
 def test_poisson():
     m = hypney.Poisson(mu=3, rate=100)
     data = m.simulate()
-    np.testing.assert_equal(m.pdf(data), stats.poisson(mu=3).pmf(data[:, 0]))
+    np.testing.assert_equal(m.pdf(data=data), stats.poisson(mu=3).pmf(data[:, 0]))
     assert m.rate() == 100.0
 
 
@@ -86,7 +86,7 @@ def test_from_histogram():
     m = hypney.From1DHistogram(hist, edges)
     data = m.simulate()
     np.testing.assert_equal(
-        m.pdf(data), stats.rv_histogram((hist, edges),).pdf(data[:, 0])
+        m.pdf(data=data), stats.rv_histogram((hist, edges),).pdf(data[:, 0])
     )
 
 
@@ -102,23 +102,23 @@ def test_mixture():
     assert mix.rate() == 60.0
     assert mix.rate(params=dict(m0_rate=0)) == 20.0
 
-    assert mix.pdf(0) == 1.0
+    assert mix.pdf(data=0) == 1.0
 
-    assert mix.diff_rate(0) == 60.0
+    assert mix.diff_rate(data=0) == 60.0
 
-    assert np.all(mix.cdf([0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
+    assert np.all(mix.cdf(data=[0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
     assert mix.simulate().shape[0] > 0
     assert mix.rvs(50).shape[0] > 0
 
     # Test forming mixtures by +
     mix2 = m1 + m2
-    assert mix2.diff_rate(0) == 60.0
+    assert mix2.diff_rate(data=0) == 60.0
 
     mix3 = m3 + mix2
-    assert mix3.diff_rate(0) == 90.0
+    assert mix3.diff_rate(data=0) == 90.0
     assert len(mix3.models) == 3, "Should unpack mixtures"
     mix4 = m1 + m2 + m3
-    assert mix4.diff_rate(0) == 90.0
+    assert mix4.diff_rate(data=0) == 90.0
 
     # TODO: Test parameter sharing
