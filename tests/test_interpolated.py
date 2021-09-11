@@ -16,10 +16,11 @@ def test_interpolated():
 
     # TODO: Derive these analytically. But they look plausible.
     x = [-0.01, 0.01, 0.49, 0.51, 0.99, 1.01, 1.49, 1.51]
-    y = [0, 0.6, 0.6, 1.0, 1.0, 0.4, 0.4, 0.0]
+    y = np.array([0, 0.6, 0.6, 1.0, 1.0, 0.4, 0.4, 0.0])
 
     m2 = m(data=x)
-    np.testing.assert_array_equal(m2.pdf(params=dict(loc=0.2)), y)
+    np.testing.assert_array_almost_equal(m2.pdf(params=dict(loc=0.2)), y)
+    np.testing.assert_array_almost_equal(m2.diff_rate(params=dict(loc=0.2)), y * 1000.0)
 
     # Test two dimensions of anchors
     m2 = hypney.Interpolation(

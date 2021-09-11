@@ -56,6 +56,13 @@ class Model(hypney.Element):
         new_self._set_data(data)
         return new_self
 
+    def _has_redefined(self, method_name):
+        """Returns if method_name is redefined from Model.method_name"""
+        f = getattr(self, method_name)
+        if not hasattr(f, "__func__"):
+            return True
+        return f.__func__ is not getattr(Model, method_name)
+
     # Validation
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
@@ -127,6 +134,11 @@ class Model(hypney.Element):
         return self(data=data)._diff_rate(params, cut=cut)
 
     def _diff_rate(self, params: dict, cut=None):
+        if not self._has_redefined("_pdf"):
+            raise NotImplementedError(
+                "Can't compute pdf of a Model implementing "
+                "neither _pdf nor _diff_rate"
+            )
         return self._pdf(params=params) * self.rate(params, cut=cut)
 
     def cut(self, data=None, cut=None):
@@ -146,7 +158,7 @@ class Model(hypney.Element):
         return self(data=data)._pdf(params)
 
     def _pdf(self, params: dict):
-        if self._diff_rate.__func__ is Model._diff_rate:
+        if not self._has_redefined("_diff_rate"):
             raise NotImplementedError(
                 "Can't compute pdf of a Model implementing "
                 "neither _pdf nor _diff_rate"
@@ -164,9 +176,16 @@ class Model(hypney.Element):
 
     def rate(self, params: dict = None, cut=None) -> np.ndarray:
         params = self.validate_params(params)
-        return params["rate"] * self.cut_efficiency(params=params, cut=cut)
+        return self._rate(params) * self.cut_efficiency(params=params, cut=cut)
+
+    def _rate(self, params: dict):
+        return params[hypney.DEFAULT_RATE_PARAM.name]
 
     def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
+        params = self.validate_params(params)
+        return self.rvs(params, size)
+
+    def _rvs(params, size):
         raise NotImplementedError
 
     def cut_efficiency(
@@ -176,6 +195,9 @@ class Model(hypney.Element):
         cut = self.validate_cut(cut)
         if cut is None:
             return 1.0
+        return self._cut_efficiency(params, cut)
+
+    def _cut_efficiency(self, params, cut):
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")
         # Evaluate CDF at rectangle endpoints, add up with alternating signs,

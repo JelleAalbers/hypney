@@ -13,7 +13,7 @@ export, __all__ = hypney.exporter()
 class Interpolation(hypney.Model):
 
     data_methods_to_interpolate = "_pdf _cdf _diff_rate".split()
-    other_methods_to_interpolate = "rate mean std".split()
+    other_methods_to_interpolate = "_rate ".split()
 
     def __init__(
         self,
@@ -51,6 +51,16 @@ class Interpolation(hypney.Model):
         self.interp_maker = hypney.GridInterpolator(anchor_values)
         self._interpolators = dict()
 
+        # Add specs of any non-interpolated params
+        # TODO: check other models agree on these?
+        param_specs = param_specs + tuple(
+            [
+                p
+                for p in self._some_model.param_specs
+                if p.name not in [q.name for q in param_specs]
+            ]
+        )
+
         # Can't call this earlier; may trigger interpolator building
         # if data is given on init
         super().__init__(
@@ -76,39 +86,39 @@ class Interpolation(hypney.Model):
         # Build interpolators for methods that take data (i.e. use self.data)
         for method_name in self.data_methods_to_interpolate:
             # Only build interpolator if method was redefined from Model
-            # ()
-            if getattr(self._some_model, method_name).__func__ != getattr(
-                hypney.Model, method_name
-            ):
-                self._build_interpolator(method_name, method_name[1:])
+            if self._has_redefined(method_name):
+                self._build_interpolator(method_name)
 
-    def _build_interpolator(self, itp_name, method_name=None):
-        if method_name is None:
-            method_name = itp_name
+    def _build_interpolator(self, itp_name):
+        # Make sure to call non-underscored methods of the anchor models,
+        # so they fill in their default params.
+        # (especially convenient for non-interpolated params. Otherwise we'd
+        #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
+        method_name = itp_name[1:] if itp_name.startswith("_") else itp_name
+
         self._interpolators[itp_name] = self.interp_maker.make_interpolator(
             # method_name=method_name does not work! Confusing...
-            partial(self._anchor_method_getter, method_name)
+            partial(self._call_anchor_method, method_name)
         )
 
     def _call_interpolator(self, itp_name, params: dict = None, **kwargs):
-        if not hasattr(self._some_model, itp_name):
-            raise AttributeError
+        if not itp_name in self._interpolators:
+            # No interpolator was built e.g. diff_rate when pdf and rate known.
+            return getattr(super(), itp_name)(params, **kwargs)
         params = self.validate_params(params)
-        # Ensure params are ordered correctly
-        params = np.stack([params[pname] for pname in self.defaults])
-        return self._interpolators[itp_name](params)[0]
+        return self._interpolators[itp_name]([self._params_to_anchor_tuple(params)])[0]
 
-    def _param_tuple(self, params):
-        return tuple([params[p.name] for p in self.param_specs])
+    def _params_to_anchor_tuple(self, params):
+        return tuple([params[p.name] for p in self.param_specs if p.anchors])
 
-    def _anchor_method_getter(self, method_name, param_tuple):
+    def _call_anchor_method(self, method_name, param_tuple):
         """Call Model.method_name for anchor model at params
         """
         return getattr(self.anchor_models[param_tuple], method_name)()
 
     def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
         params = self.validate_params(params)
-        anchor = self._param_tuple(params)
+        anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             # Dig into interpolator to get weight for each anchor,
             # then mix rvs call with different weights?
