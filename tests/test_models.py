@@ -2,6 +2,7 @@ import pickle
 import tempfile
 
 import numpy as np
+import pytest
 from scipy import stats
 
 import hypney
@@ -21,11 +22,16 @@ def test_uniform():
     m = hypney.Uniform(rate=0)
     data = m.simulate()
     assert data.shape == (0, 1)
-    data = m.rvs(5)
+    data = m.rvs(size=5)
     assert data.shape == (5, 1)
 
     # Test different data formats and pdf
-    assert m.pdf(data=0) == m.pdf(data=[0]) == m.pdf(data=np.array([0])) == m.pdf(data=np.array([[0]]))
+    assert (
+        m.pdf(data=0)
+        == m.pdf(data=[0])
+        == m.pdf(data=np.array([0]))
+        == m.pdf(data=np.array([[0]]))
+    )
     assert m.pdf(data=0) == 1.0
 
     # Test cdf
@@ -44,6 +50,15 @@ def test_uniform():
     assert m.cut_efficiency(cut=(0, 0.5)) == 0.5
     assert m.rate(cut=(0, 0.5)) == 50.0
 
+    # Test freezing data
+    m = hypney.Uniform(rate=100)
+    with pytest.raises(Exception):
+        m.pdf()
+    m2 = m(data=0)
+    assert m2 is not m
+    assert m2.pdf() == 1.0
+    assert m2(data=1) not in (m, m2)
+
     # Models can be pickled and unpickled
     m = hypney.Uniform(loc=0.5)
     with tempfile.NamedTemporaryFile() as tempf:
@@ -57,12 +72,14 @@ def test_uniform():
 
 def test_beta():
     m = hypney.Beta(a=0.5, b=0.5, rate=100)
+
     data = m.simulate()
-    np.testing.assert_equal(m.pdf(data=data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
-    assert m.rate() == 100.0
     assert len(data)
     assert data.min() > 0
     assert data.max() < 1
+
+    np.testing.assert_equal(m.pdf(data=data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
+    assert m.rate() == 100.0
 
     m2 = m(rate=20, loc=-100, scale=10)
     assert m2.defaults["a"] == 0.5
@@ -109,7 +126,7 @@ def test_mixture():
     assert np.all(mix.cdf(data=[0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
 
     assert mix.simulate().shape[0] > 0
-    assert mix.rvs(50).shape[0] > 0
+    assert mix.rvs(size=50).shape[0] > 0
 
     # Test forming mixtures by +
     mix2 = m1 + m2

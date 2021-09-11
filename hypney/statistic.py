@@ -8,34 +8,63 @@ import hypney
 export, __all__ = hypney.exporter()
 
 
-class Statistic:
+class Statistic(hypney.Element):
+    # Does statistic depends on data? If not, it depends only on parameters
+    # (like a prior / constraint)
     data_dependent = True
+
+    # Does statistic depends on parameters? If not, it depends only on the data
+    # (like the count of events).
+    # In the latter case,
+    #   * compute takes only data as an argument (not params)
+    #   * compute will be run on initialization (if data is available)
+    #     and the result stored in _result, which __call__ returns.
+    #   * The distribution will still be assumed to depend on parameters.
     param_dependent = True
+
+    # Is data necessary to compute the statistic on different parameters?
+    # If not, init_data should compute sufficient summaries.
     keep_data = True
+
     data = None
 
-    def __init__(self, model: hypney.Model, data=None):
-        self.model = model
-        self._set_data(data)
-
+    def __init__(
+        self, param_container: hypney.Element, data=None, distribution=None
+    ):
+        self.param_specs = param_container.param_specs
         if not self.param_dependent:
             self.keep_data = False
+
+        self._set_data(data)
+
+        if hasattr(distribution, "build"):
+            self.pdf, self.cdf = distribution.build(self, param_container)
+        if isinstance(distribution, stats.rv_frozen):
+            if isinstance(distribution.dist, stats.rv_continuous):
+                self.pdf, self.cdf = distribution.pdf, distribution.cdf
+            else:
+                # Sorry statisticians, I'm just going to call pmf pdf...
+                self.pdf, self.cdf = distribution.pmf, distribution.cdf
+        else:
+            raise ValueError("Invalid distribution")
+
+    def validate_data(self, data):
+        return self.param_container.validate_data(data)
 
     def _set_data(self, data=None):
         if data is None:
             return
 
-        data = self.model.validate_data(data)
+        data = self.validate_data(data)
         self.data = data
         self.init_data()
-
         if not self.param_dependent:
-            # Precompute result on this data. See __call__ for special case
-            # where this is returned
+            # Precompute result on the data.
             self._result = self.compute()
+
         if not self.keep_data:
             # Statistic relies only on stuff computed in init_data
-            # (and possibly params); replace self.data with something other
+            # (well, and params probably); replace self.data with something other
             # than None that takes no memory
             self.data = True
 
@@ -91,15 +120,36 @@ class Statistic:
     def compute(self, params):
         raise NotImplementedError
 
+    def pdf(self, params):
+        raise NotImplementedError
 
-class LogLikelihood(Statistic):
+    def cdf(self, params):
+        raise NotImplementedError
+
+
+class StatisticFromModel(Statistic):
+    @property
+    def model(self):
+        return self.param_container
+
+    def rvs(self, size=1, params=None):
+        """Return statistic evaluated on simulated data,
+        generated from model with params"""
+        results = np.zeros(size)
+        for i in range(len(size)):
+            sim_data = self.model.simulate(params=params)
+            results[i] = self(data=sim_data, params=params)
+        return results
+
+
+class LogLikelihood(StatisticFromModel):
     def compute(self, params):
         return -self.model.rate(params) + np.sum(
             np.log(self.model.diff_rate(self.data, params))
         )
 
 
-class LogLikelihoodRatio(Statistic):
+class LogLikelihoodRatio(StatisticFromModel):
     def __init__(self, *args, max_estimator=None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -116,7 +166,7 @@ class LogLikelihoodRatio(Statistic):
         return self.ll(params, self.data) - self.ll_bestfit
 
 
-class Count(Statistic):
+class Count(StatisticFromModel):
     param_dependent = False
 
     def compute(self):

@@ -111,12 +111,12 @@ class Mixture(hypney.Model):
             axis=0,
         )
 
-    def rvs(self, n: int, params: dict = None) -> np.ndarray:
+    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
         params = self.validate_params(params)
-        n_from = np.random.multinomial(n, self.f_per_model(params))
+        n_from = np.random.multinomial(size, self.f_per_model(params))
         return np.concatenate(
             [
-                m.rvs(_n, params=ps)
+                m.rvs(params=ps, size=_n)
                 for _n, (m, ps) in zip(n_from, self.iter_models_params(params))
             ]
         )

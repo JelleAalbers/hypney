@@ -22,9 +22,9 @@ class ScipyUnivariate(hypney.Model):
     def dist_params(self, params):
         return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
 
-    def rvs(self, n: int, params: dict = None) -> np.ndarray:
+    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
         params = self.validate_params(params)
-        return self.dist.rvs(size=n, **self.dist_params(params))[:, None]
+        return self.dist.rvs(size=size, **self.dist_params(params))[:, None]
 
     def _pdf(self, params: dict = None) -> np.ndarray:
         pdf = self.dist.pdf if hasattr(self.dist, "pdf") else self.dist.pmf

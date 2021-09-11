@@ -34,10 +34,12 @@ class Model(hypney.Element):
 
     # Initialization
 
-    def __init__(self, name="", data=None, params=None, observables=None, **new_defaults):
+    def __init__(
+        self, name="", data=None, param_specs=None, observables=None, **new_defaults
+    ):
         self.name = name
-        if params is not None:
-            self.param_specs = params
+        if param_specs is not None:
+            self.param_specs = param_specs
         if observables is not None:
             self.observables = observables
         self._set_defaults(new_defaults)
@@ -102,14 +104,14 @@ class Model(hypney.Element):
         if self.simulator_gives_efficiency:
             mu = self.rate_before_efficiencies(params)
             n = np.random.poisson(mu)
-            events, p_keep = self.simulate_partially_efficient(n, params, cut=cut)
+            events, p_keep = self.simulate_partially_efficient(params, size=n, cut=cut)
             events = events[np.random.rand(n) < p_keep]
             return events
 
         else:
             mu = self.rate(params)
             n = np.random.poisson(mu)
-            data = self.rvs(n, params)
+            data = self.rvs(params, size=n)
             assert len(data) == n
             data = self.cut(data, cut)
 
@@ -125,7 +127,7 @@ class Model(hypney.Element):
         return self(data=data)._diff_rate(params, cut=cut)
 
     def _diff_rate(self, params: dict, cut=None):
-       return self._pdf(params=params) * self.rate(params, cut=cut)
+        return self._pdf(params=params) * self.rate(params, cut=cut)
 
     def cut(self, data=None, cut=None):
         cut = self.validate_cut(cut)
@@ -139,15 +141,16 @@ class Model(hypney.Element):
             passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
         return self.data[passed]
 
-    def pdf(self, params: dict = None, data: np.ndarray=None) -> np.ndarray:
+    def pdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
         params = self.validate_params(params)
         return self(data=data)._pdf(params)
 
     def _pdf(self, params: dict):
-        if self.__class__._diff_rate is Model._diff_rate:
+        if self._diff_rate.__func__ is Model._diff_rate:
             raise NotImplementedError(
                 "Can't compute pdf of a Model implementing "
-                "neither _pdf nor _diff_rate")
+                "neither _pdf nor _diff_rate"
+            )
         return self._diff_rate(self.data, params) / self.rate(params)
 
     def cdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
@@ -161,12 +164,14 @@ class Model(hypney.Element):
 
     def rate(self, params: dict = None, cut=None) -> np.ndarray:
         params = self.validate_params(params)
-        return params["rate"] * self.cut_efficiency(cut, params)
+        return params["rate"] * self.cut_efficiency(params=params, cut=cut)
 
-    def rvs(self, n: int, params: dict = None) -> np.ndarray:
+    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
         raise NotImplementedError
 
-    def cut_efficiency(self, cut=None, params: dict = None):
+    def cut_efficiency(
+        self, params=None, cut=None,
+    ):
         params = self.validate_params(params)
         cut = self.validate_cut(cut)
         if cut is None:
