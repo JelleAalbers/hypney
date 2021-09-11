@@ -10,20 +10,25 @@ import hypney
 export, __all__ = hypney.exporter()
 
 
-class Morpher:
-    def __init__(self, parameters):
-        """Initialize the interpolator, telling it which shape_parameters we're going to use
+@export
+class GridInterpolator:
+    def __init__(self, anchors_per_parameter):
+        """Initialize the interpolator, telling it which parameters we're going to use
 
         anchors_per_parameter: sequence of anchor points per parameter
         """
-        raise NotImplementedError
+        # Compute the regular grid of anchor models at the specified anchor points
+        self.anchor_z_arrays = [
+            np.array(list(sorted(anchors))) for anchors in anchors_per_parameter
+        ]
+        self.anchor_z_grid = arrays_to_grid(self.anchor_z_arrays)
 
     def get_anchor_points(self):
         """Returns list of tuples of anchor coordinates
         """
-        raise NotImplementedError
+        return [zs for _, zs in self._anchor_grid_iterator()]
 
-    def make_interpolator(self, f, inputs_at_anchors=None, extra_dims=tuple()):
+    def make_interpolator(self, f, inputs_at_anchors=None):
         """Return interpolator of f between anchor points.
 
         The interpolator is vectorized, so t will add one dimension for scalar inputs.
@@ -32,41 +37,28 @@ class Morpher:
          - f: Function taking one argument, and returning an extra_dims shaped array.
          - inputs_at_anchors: dict {anchor: f_input} mapping anchor values
             inputs to function arguments. If None, anchor values themselves are used.
-         - extra_dims: tuple of integers, shape of return value of f
-            Leave to the default if f returns a scalar
 
         """
-        raise NotImplementedError
-
-
-@export
-class GridInterpolator(Morpher):
-    @hypney.inherit_docstring_from(Morpher)
-    def __init__(self, anchors_per_parameter):
-        # Compute the regular grid of anchor models at the specified anchor points
-        self.anchor_z_arrays = [
-            np.array(list(sorted(anchors)))
-            for anchors in anchors_per_parameter]
-        self.anchor_z_grid = arrays_to_grid(self.anchor_z_arrays)
-
-    @hypney.inherit_docstring_from(Morpher)
-    def get_anchor_points(self):
-        return [zs for _, zs in self._anchor_grid_iterator()]
-
-    @hypney.inherit_docstring_from(Morpher)
-    def make_interpolator(self, f, inputs_at_anchors=None, extra_dims=tuple()):
         if inputs_at_anchors is None:
             inputs_at_anchors = {z: z for z in self.get_anchor_points()}
 
-        # Allocate an array which will hold the scores at each anchor model
-        anchor_scores = np.zeros(list(self.anchor_z_grid.shape)[:-1] + list(extra_dims))
-
-
-        # Iterate over the anchor grid points
+        # Compute f at each anchor point
+        anchor_scores = None
         for anchor_grid_index, _zs in self._anchor_grid_iterator():
-            # Compute f at this point, and store it in anchor_scores
-            anchor_scores[tuple(anchor_grid_index + [slice(None)] * len(extra_dims))] = \
-                f(inputs_at_anchors[tuple(_zs)])
+            # Compute f at this point
+            result = f(inputs_at_anchors[tuple(_zs)])
+
+            if anchor_scores is None:
+                # Now that we have the first result, we can allocate
+                # the array needed to hold all results
+                extra_dims = np.asarray(result).shape
+                anchor_scores = np.zeros(
+                    list(self.anchor_z_grid.shape)[:-1] + list(extra_dims)
+                )
+
+            anchor_scores[
+                tuple(anchor_grid_index + [slice(None)] * len(extra_dims))
+            ] = result
 
         return RegularGridInterpolator(self.anchor_z_arrays, anchor_scores)
 
