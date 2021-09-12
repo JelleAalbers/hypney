@@ -76,7 +76,7 @@ class Interpolation(hypney.Model):
             if hasattr(self._some_model, method_name):
                 self._build_interpolator(method_name)
 
-    def init_data(self):
+    def _init_data(self):
         # Update anchor models to ones with appropriate data & cut
         self.anchor_models = {
             anchor: model(data=self.data, cut=self.cut)
@@ -89,10 +89,10 @@ class Interpolation(hypney.Model):
             if self._has_redefined(method_name):
                 self._build_interpolator(method_name)
 
-    def init_cut(self):
+    def _init_cut(self):
         if self.data is not None:
-            self.init_data()
-        super().init_cut()
+            self._init_data()
+        super()._init_cut()
 
     def _build_interpolator(self, itp_name: str):
         # Make sure to call non-underscored methods of the anchor models,
@@ -106,7 +106,9 @@ class Interpolation(hypney.Model):
             partial(self._call_anchor_method, method_name)
         )
 
-    def _call_interpolator(self, itp_name, params: dict = None, *, cut=hypney.NotChanged):
+    def _call_interpolator(
+        self, itp_name, params: dict = None, *, cut=hypney.NotChanged
+    ):
         if cut is not hypney.NotChanged:
             self = self(cut=cut)
         if not itp_name in self._interpolators:

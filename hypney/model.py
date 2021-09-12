@@ -5,68 +5,57 @@ import typing as ty
 import numpy as np
 
 import hypney
+from hypney import NotChanged
 
-export, __all__ = hypney.exporter(also_export=("DEFAULT_OBSERVABLE",))
-
-
-@export
-class Observable(ty.NamedTuple):
-    """Description of a observable space: name and limits"""
-
-    name: str
-    min: float = -float("inf")
-    max: float = float("inf")
-    # Whether only integer values are allowed
-    integer: bool = False
-
-
-DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
-
-
-@export
-class NotChanged:
-    """Default argument where None would be ambiguous"""
-    pass
-
-
-@export
-class NoCut:
-    pass
+export, __all__ = hypney.exporter()
 
 
 @export
 class Model(hypney.Element):
 
-    observables: ty.Tuple[Observable] = (DEFAULT_OBSERVABLE,)
-    cut: ty.Union[NoCut, tuple] = NoCut
+    observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
+    cut: ty.Union[hypney.NoCut, tuple] = hypney.NoCut
 
     @property
     def n_dim(self):
         return len(self.observables)
 
+    ##
     # Initialization
+    ##
 
     def __init__(
-        self, name="", data=None, param_specs=None, observables=None, cut=NoCut, **new_defaults
+        self,
+        name="",
+        data=None,
+        param_specs=NotChanged,
+        observables=NotChanged,
+        cut=NotChanged,
+        **new_defaults,
     ):
         self.name = name
 
-        # These are often set as class attributes, so are allowed to be None
-        if param_specs is not None:
+        # These have default class attributes
+        if param_specs is not NotChanged:
             self.param_specs = param_specs
-        if observables is not None:
+        if observables is not NotChanged:
             self.observables = observables
+        if cut is not NotChanged:
+            self._set_cut(cut)
 
         self._set_defaults(new_defaults)
-        self._set_cut(cut)
         self._set_data(data)
 
-    def __call__(self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults):
+    def __call__(
+        self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults
+    ):
         """Return a model with possibly changed name, defaults, or data"""
-        # If the user explicitly sets data=None, it would be ambiguous:
-        # should we return a model with the same default, or with data 'unset'?
-        # Hence the funny _not_changed default argument instead of None
-        if name is NotChanged and data is NotChanged and cut is NotChanged and not new_defaults:
+        if (
+            name is NotChanged
+            and data is NotChanged
+            and cut is NotChanged
+            and not new_defaults
+        ):
             return self
         new_self = copy(self)
         if name is not NotChanged:
@@ -78,6 +67,9 @@ class Model(hypney.Element):
             new_self._set_cut(cut)
         return new_self
 
+    def __add__(self, other):
+        return hypney.Mixture(self, other)
+
     def _has_redefined(self, method_name):
         """Returns if method_name is redefined from Model.method_name"""
         f = getattr(self, method_name)
@@ -87,13 +79,15 @@ class Model(hypney.Element):
 
     def _set_cut(self, cut):
         self.cut = self.validate_cut(cut)
-        self.init_cut()
+        self._init_cut()
 
-    def init_cut(self):
+    def _init_cut(self):
         """Called during initialization, if cut is to be frozen"""
         pass
 
-    # Validation
+    ##
+    # Input validation
+    ##
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
         if data is None:
@@ -117,7 +111,7 @@ class Model(hypney.Element):
         return data
 
     def validate_cut(self, cut):
-        if cut is NoCut:
+        if cut is hypney.NoCut:
             return cut
         if cut is None:
             raise ValueError("None is not a valid cut, use NoCut")
@@ -133,19 +127,25 @@ class Model(hypney.Element):
             raise ValueError("Cut should be a tuple of 2-tuples")
         return cut
 
+    ##
+    # Simulation
+    ##
+
     @property
-    def simulator_gives_efficiency(self):
-        return hasattr(self, "simulate_partially_efficient") and hasattr(
+    def simulate_partially_efficient(self):
+        return hasattr(self, "simulate_p_keep") and hasattr(
             self, "rate_before_efficiencies"
         )
 
     def simulate(self, params: dict = None, *, cut=NotChanged) -> np.ndarray:
         params = self.validate_params(params)
+        return self(cut=cut)._simulate(params)
 
-        if self.simulator_gives_efficiency:
+    def _simulate(self, params):
+        if self.simulate_partially_efficient:
             mu = self.rate_before_efficiencies(params)
             n = np.random.poisson(mu)
-            events, p_keep = self(cut=cut).simulate_partially_efficient(params, size=n)
+            events, p_keep = self.simulate_p_keep(params, size=n)
             events = events[np.random.rand(n) < p_keep]
             return events
 
@@ -154,12 +154,13 @@ class Model(hypney.Element):
             n = np.random.poisson(mu)
             data = self.rvs(params, size=n)
             assert len(data) == n
-            data = self.apply_cut(data, cut)
+            data = self.apply_cut(data)
 
         return data
 
+    ##
     # Methods taking data
-    # _ methods do not take data
+    ##
 
     def diff_rate(
         self, params: dict = None, data: np.ndarray = NotChanged, *, cut=NotChanged
@@ -179,7 +180,7 @@ class Model(hypney.Element):
         return self(data=data, cut=cut)._apply_cut()
 
     def _apply_cut(self):
-        if self.cut is NoCut:
+        if self.cut is hypney.NoCut:
             return self.data
         passed = np.ones(len(self.data), np.bool_)
         for dim_i, (l, r) in enumerate(self.cut):
@@ -205,7 +206,9 @@ class Model(hypney.Element):
     def _cdf(self, params: dict):
         raise NotImplementedError
 
+    ##
     # Methods not taking data
+    ##
 
     def rate(self, params: dict = None, cut=NotChanged) -> np.ndarray:
         params = self.validate_params(params)
@@ -218,17 +221,17 @@ class Model(hypney.Element):
         params = self.validate_params(params)
         return self._rvs(params, size)
 
-    def _rvs(self, params, size):
+    def _rvs(self, params: dict, size: int):
         raise NotImplementedError
 
     def cut_efficiency(
-        self, params=None, cut=NotChanged,
+        self, params: dict = None, cut=NotChanged,
     ):
         params = self.validate_params(params)
         return self(cut=cut)._cut_efficiency(params)
 
-    def _cut_efficiency(self, params):
-        if self.cut is NoCut:
+    def _cut_efficiency(self, params: dict):
+        if self.cut is hypney.NoCut:
             return 1.0
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")
@@ -249,6 +252,3 @@ class Model(hypney.Element):
             ]
         )
         return np.sum(np.array(signs) * self.cdf(params=params, data=points))
-
-    def __add__(self, other):
-        return hypney.Mixture(self, other)

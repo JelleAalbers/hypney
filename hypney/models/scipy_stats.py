@@ -19,18 +19,18 @@ class ScipyUnivariate(hypney.Model):
     dist: ty.Union[stats.rv_continuous, stats.rv_discrete]
     param_specs = standard_param_specs
 
-    def dist_params(self, params):
+    def _dist_params(self, params):
         return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
 
     def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
-        return self.dist.rvs(size=size, **self.dist_params(params))[:, None]
+        return self.dist.rvs(size=size, **self._dist_params(params))[:, None]
 
     def _pdf(self, params: dict) -> np.ndarray:
         pdf = self.dist.pdf if hasattr(self.dist, "pdf") else self.dist.pmf
-        return pdf(self.data[:, 0], **self.dist_params(params))
+        return pdf(self.data[:, 0], **self._dist_params(params))
 
     def _cdf(self, params: dict) -> np.ndarray:
-        return self.dist.cdf(self.data[:, 0], **self.dist_params(params))
+        return self.dist.cdf(self.data[:, 0], **self._dist_params(params))
 
 
 @export

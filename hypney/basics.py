@@ -6,7 +6,7 @@ import numpy as np
 import hypney as hp
 
 
-export, __all__ = hp.exporter(also_export=["DEFAULT_RATE_PARAM"])
+export, __all__ = hp.exporter(also_export=["DEFAULT_RATE_PARAM", "DEFAULT_OBSERVABLE"])
 
 
 @export
@@ -22,6 +22,37 @@ class ParameterSpec(ty.NamedTuple):
 
 
 DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=10)
+
+
+@export
+class Observable(ty.NamedTuple):
+    """Description of a observable space: name and limits"""
+
+    name: str
+    min: float = -float("inf")
+    max: float = float("inf")
+    # Whether only integer values are allowed
+    integer: bool = False
+
+
+DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
+
+
+@export
+class NotChanged:
+    """Default argument used where None would be ambiguous or unclear
+
+    (for example, would data=None set data to None, or keep data unchanged?)
+    """
+
+    pass
+
+
+@export
+class NoCut:
+    """Instruction to not cut data"""
+
+    pass
 
 
 @export
@@ -44,7 +75,7 @@ class Element:
 
         data = self.validate_data(data)
         self.data = data
-        self.init_data()
+        self._init_data()
 
     def _set_defaults(self, new_defaults: dict):
         new_defaults = self.validate_params(new_defaults)
@@ -52,7 +83,7 @@ class Element:
             [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
         )
 
-    def init_data(self):
+    def _init_data(self):
         pass
 
     def validate_params(self, params: dict) -> dict:

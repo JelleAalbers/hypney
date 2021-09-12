@@ -17,6 +17,10 @@ class Mixture(hypney.Model):
     # param_mapping   (mname -> (pname in model, pname in mixture))
     param_mapping: ty.Dict[str, ty.Tuple[str, str]]
 
+    ##
+    # Initialization
+    ##
+
     def __init__(self, *models):
         assert len(models) > 1
 
@@ -53,68 +57,74 @@ class Mixture(hypney.Model):
 
         super().__init__(name="mix_" + "_".join(self.model_names))
 
-    def init_data(self):
+    def _init_data(self):
         self.models = tuple([m(data=self.data) for m in self.models])
-        super().init_data()
+        super()._init_data()
 
-    def init_cut(self):
+    def _init_cut(self):
         self.models = tuple([m(cut=self.cut) for m in self.models])
-        super().init_cut()
+        super()._init_cut()
 
-    def iter_models_params(self, params):
+    ##
+    # Simulation
+    ##
+
+    def _simulate(self, params: dict) -> np.ndarray:
+        return np.concatenate(
+            [m.simulate(params=ps) for m, ps in self._iter_models_params(params)],
+            axis=0,
+        )
+
+    def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
+        n_from = np.random.multinomial(size, self._f_per_model(params))
+        return np.concatenate(
+            [
+                m._rvs(params=ps, size=_n)
+                for _n, (m, ps) in zip(n_from, self._iter_models_params(params))
+            ]
+        )
+
+    ##
+    # Main statistical methods
+    ##
+
+    def _rate(self, params: DynamicClassAttribute) -> np.ndarray:
+        return sum(self._rate_per_model(params))
+
+    def _pdf(self, params: dict) -> np.ndarray:
+        return np.average(
+            [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
+            axis=0,
+            weights=self._f_per_model(params),
+        )
+
+    def _cdf(self, params: dict) -> np.ndarray:
+        return np.average(
+            [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
+            axis=0,
+            weights=self._f_per_model(params),
+        )
+
+    def _diff_rate(self, params: dict) -> np.ndarray:
+        return np.sum(
+            [m._diff_rate(params=ps) for m, ps in self._iter_models_params(params)],
+            axis=0,
+        )
+
+    ##
+    # Helpers
+    ##
+
+    def _iter_models_params(self, params):
         for m, param_map in zip(self.models, self.param_mapping.values()):
             yield m, {
                 pname_in_model: params[pname_in_mixture]
                 for pname_in_model, pname_in_mixture in param_map
             }
 
-    def rate_per_model(self, params: dict) -> np.ndarray:
-        return np.array(
-            [m._rate(ps) for m, ps in self.iter_models_params(params)]
-        )
+    def _rate_per_model(self, params: dict) -> np.ndarray:
+        return np.array([m._rate(ps) for m, ps in self._iter_models_params(params)])
 
-    def _rate(self, params: DynamicClassAttribute) -> np.ndarray:
-        return sum(self.rate_per_model(params))
-
-    def f_per_model(self, params):
-        mus = self.rate_per_model(params)
+    def _f_per_model(self, params):
+        mus = self._rate_per_model(params)
         return mus / mus.sum()
-
-    def _pdf(self, params: dict) -> np.ndarray:
-        return np.average(
-            [m._pdf(params=ps) for m, ps in self.iter_models_params(params)],
-            axis=0,
-            weights=self.f_per_model(params),
-        )
-
-    def _cdf(self, params: dict) -> np.ndarray:
-        return np.average(
-            [m._cdf(params=ps) for m, ps in self.iter_models_params(params)],
-            axis=0,
-            weights=self.f_per_model(params),
-        )
-
-    def _diff_rate(self, params: dict) -> np.ndarray:
-        return np.sum(
-            [m._diff_rate(params=ps) for m, ps in self.iter_models_params(params)],
-            axis=0,
-        )
-
-    def simulate(self, params: dict, *, cut=hypney.NotChanged) -> np.ndarray:
-        params = self.validate_params(params)
-        return np.concatenate(
-            [
-                m(cut=cut).simulate(params=ps)
-                for m, ps in self.iter_models_params(params)
-            ],
-            axis=0,
-        )
-
-    def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
-        n_from = np.random.multinomial(size, self.f_per_model(params))
-        return np.concatenate(
-            [
-                m._rvs(params=ps, size=_n)
-                for _n, (m, ps) in zip(n_from, self.iter_models_params(params))
-            ]
-        )

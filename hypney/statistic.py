@@ -28,9 +28,7 @@ class Statistic(hypney.Element):
 
     data = None
 
-    def __init__(
-        self, param_container: hypney.Element, data=None, distribution=None
-    ):
+    def __init__(self, param_container: hypney.Element, data=None, distribution=None):
         self.param_specs = param_container.param_specs
         if not self.param_dependent:
             self.keep_data = False
