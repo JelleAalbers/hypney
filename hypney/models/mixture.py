@@ -59,20 +59,20 @@ class Mixture(hypney.Model):
                 for pname_in_model, pname_in_mixture in param_map
             }
 
-    def rate_per_model(self, params: dict = None, *, cut=None) -> np.ndarray:
+    def rate_per_model(self, params: dict = None, *, cut=hypney.NotChanged) -> np.ndarray:
         params = self.validate_params(params)
         return np.array(
-            [m.rate(ps, cut=cut) for m, ps in self.iter_models_params(params)]
+            [m(cut=cut).rate(ps) for m, ps in self.iter_models_params(params)]
         )
 
-    def rate(self, params: dict = None, *, cut=None) -> np.ndarray:
-        return sum(self.rate_per_model(params, cut=cut))
+    def rate(self, params: dict = None, *, cut=hypney.NotChanged) -> np.ndarray:
+        return sum(self(cut=cut).rate_per_model(params))
 
     def f_per_model(self, params):
         mus = self.rate_per_model(params)
         return mus / mus.sum()
 
-    def pdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
+    def pdf(self, params: dict = None, data: np.ndarray = hypney.NotChanged) -> np.ndarray:
         params = self.validate_params(params)
         return np.average(
             [m.pdf(params=ps, data=data) for m, ps in self.iter_models_params(params)],
@@ -80,7 +80,7 @@ class Mixture(hypney.Model):
             weights=self.f_per_model(params),
         )
 
-    def cdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
+    def cdf(self, params: dict = None, data: np.ndarray = hypney.NotChanged) -> np.ndarray:
         # TODO: check.. and we're duplicating most of pdf...
         params = self.validate_params(params)
         return np.average(
@@ -90,22 +90,22 @@ class Mixture(hypney.Model):
         )
 
     def diff_rate(
-        self, params: dict = None, data: np.ndarray = None, *, cut=None
+        self, params: dict = None, data: np.ndarray = hypney.NotChanged, *, cut=hypney.NotChanged,
     ) -> np.ndarray:
         params = self.validate_params(params)
         return np.sum(
             [
-                m.diff_rate(params=ps, data=data, cut=cut)
+                m(cut=cut, data=data).diff_rate(params=ps)
                 for m, ps in self.iter_models_params(params)
             ],
             axis=0,
         )
 
-    def simulate(self, params: dict = None, *, cut=None) -> np.ndarray:
+    def simulate(self, params: dict = None, *, cut=hypney.NotChanged) -> np.ndarray:
         params = self.validate_params(params)
         return np.concatenate(
             [
-                m.simulate(params=ps, cut=cut)
+                m(cut=cut).simulate(params=ps)
                 for m, ps in self.iter_models_params(params)
             ],
             axis=0,

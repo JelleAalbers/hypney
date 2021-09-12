@@ -77,9 +77,9 @@ class Interpolation(hypney.Model):
                 self._build_interpolator(method_name)
 
     def init_data(self):
-        # Update anchor models to ones with data
+        # Update anchor models to ones with appropriate data & cut
         self.anchor_models = {
-            anchor: model(data=self.data)
+            anchor: model(data=self.data, cut=self.cut)
             for anchor, model in self.anchor_models.items()
         }
 
@@ -89,7 +89,10 @@ class Interpolation(hypney.Model):
             if self._has_redefined(method_name):
                 self._build_interpolator(method_name)
 
-    def _build_interpolator(self, itp_name):
+    def init_cut(self):
+        return self.init_data(self)
+
+    def _build_interpolator(self, itp_name: str):
         # Make sure to call non-underscored methods of the anchor models,
         # so they fill in their default params.
         # (especially convenient for non-interpolated params. Otherwise we'd
@@ -101,10 +104,12 @@ class Interpolation(hypney.Model):
             partial(self._call_anchor_method, method_name)
         )
 
-    def _call_interpolator(self, itp_name, params: dict = None, **kwargs):
+    def _call_interpolator(self, itp_name, params: dict = None, *, cut=hypney.NotChanged):
+        if cut is not hypney.NotChanged:
+            self = self(cut=cut)
         if not itp_name in self._interpolators:
             # No interpolator was built e.g. diff_rate when pdf and rate known.
-            return getattr(super(), itp_name)(params, **kwargs)
+            return getattr(super(), itp_name)(params)
         params = self.validate_params(params)
         return self._interpolators[itp_name]([self._params_to_anchor_tuple(params)])[0]
 

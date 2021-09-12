@@ -23,7 +23,14 @@ class Observable(ty.NamedTuple):
 DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
 
 
-class _not_changed:
+@export
+class NotChanged:
+    """Default argument where None would be ambiguous"""
+    pass
+
+
+@export
+class NoCut:
     pass
 
 
@@ -31,6 +38,7 @@ class _not_changed:
 class Model(hypney.Element):
 
     observables: ty.Tuple[Observable] = (DEFAULT_OBSERVABLE,)
+    cut: ty.Union[NoCut, tuple] = NoCut
 
     @property
     def n_dim(self):
@@ -39,28 +47,35 @@ class Model(hypney.Element):
     # Initialization
 
     def __init__(
-        self, name="", data=None, param_specs=None, observables=None, **new_defaults
+        self, name="", data=None, param_specs=None, observables=None, cut=NoCut, **new_defaults
     ):
         self.name = name
+
+        # These are often set as class attributes, so are allowed to be None
         if param_specs is not None:
             self.param_specs = param_specs
         if observables is not None:
             self.observables = observables
+
         self._set_defaults(new_defaults)
+        self._set_cut(cut)
         self._set_data(data)
 
-    def __call__(self, name=_not_changed, data=_not_changed, **new_defaults):
+    def __call__(self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults):
         """Return a model with possibly changed name, defaults, or data"""
         # If the user explicitly sets data=None, it would be ambiguous:
         # should we return a model with the same default, or with data 'unset'?
         # Hence the funny _not_changed default argument instead of None
-        if name is _not_changed and data is _not_changed and not new_defaults:
+        if name is NotChanged and data is NotChanged and cut is NotChanged and not new_defaults:
             return self
         new_self = copy(self)
-        if name is not _not_changed:
+        if name is not NotChanged:
             new_self.name = name
         new_self._set_defaults(new_defaults)
-        new_self._set_data(data)
+        if data is not NotChanged:
+            new_self._set_data(data)
+        if cut is not NotChanged:
+            new_self._set_cut(cut)
         return new_self
 
     def _has_redefined(self, method_name):
@@ -69,6 +84,14 @@ class Model(hypney.Element):
         if not hasattr(f, "__func__"):
             return True
         return f.__func__ is not getattr(Model, method_name)
+
+    def _set_cut(self, cut):
+        self.cut = self.validate_cut(cut)
+        self.init_cut()
+
+    def init_cut(self):
+        """Called during initialization, if cut is to be frozen"""
+        pass
 
     # Validation
 
@@ -94,8 +117,10 @@ class Model(hypney.Element):
         return data
 
     def validate_cut(self, cut):
-        if cut is None:
+        if cut is NoCut:
             return cut
+        if cut is None:
+            raise ValueError("None is not a valid cut, use NoCut")
         if isinstance(cut, (list, np.ndarray)):
             cut = tuple(cut)
         if not isinstance(cut, tuple):
@@ -114,13 +139,13 @@ class Model(hypney.Element):
             self, "rate_before_efficiencies"
         )
 
-    def simulate(self, params: dict = None, *, cut=None) -> np.ndarray:
+    def simulate(self, params: dict = None, *, cut=NotChanged) -> np.ndarray:
         params = self.validate_params(params)
 
         if self.simulator_gives_efficiency:
             mu = self.rate_before_efficiencies(params)
             n = np.random.poisson(mu)
-            events, p_keep = self.simulate_partially_efficient(params, size=n, cut=cut)
+            events, p_keep = self(cut=cut).simulate_partially_efficient(params, size=n)
             events = events[np.random.rand(n) < p_keep]
             return events
 
@@ -129,7 +154,7 @@ class Model(hypney.Element):
             n = np.random.poisson(mu)
             data = self.rvs(params, size=n)
             assert len(data) == n
-            data = self.cut(data, cut)
+            data = self.apply_cut(data, cut)
 
         return data
 
@@ -137,32 +162,31 @@ class Model(hypney.Element):
     # _ methods do not take data
 
     def diff_rate(
-        self, params: dict = None, data: np.ndarray = None, *, cut=None
+        self, params: dict = None, data: np.ndarray = NotChanged, *, cut=NotChanged
     ) -> np.ndarray:
         params = self.validate_params(params)
-        return self(data=data)._diff_rate(params, cut=cut)
+        return self(data=data, cut=cut)._diff_rate(params)
 
-    def _diff_rate(self, params: dict, cut=None):
+    def _diff_rate(self, params: dict):
         if not self._has_redefined("_pdf"):
             raise NotImplementedError(
                 "Can't compute pdf of a Model implementing "
                 "neither _pdf nor _diff_rate"
             )
-        return self._pdf(params=params) * self.rate(params, cut=cut)
+        return self._pdf(params=params) * self._rate(params=params)
 
-    def cut(self, data=None, cut=None):
-        cut = self.validate_cut(cut)
-        return self(data=data)._cut(cut=cut)
+    def apply_cut(self, data=NotChanged, cut=NotChanged):
+        return self(data=data, cut=cut)._apply_cut()
 
-    def _cut(self, cut):
-        if cut is None:
+    def _apply_cut(self):
+        if self.cut is NoCut:
             return self.data
         passed = np.ones(len(self.data), np.bool_)
-        for dim_i, (l, r) in enumerate(cut):
+        for dim_i, (l, r) in enumerate(self.cut):
             passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
         return self.data[passed]
 
-    def pdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
+    def pdf(self, params: dict = None, data: np.ndarray = NotChanged) -> np.ndarray:
         params = self.validate_params(params)
         return self(data=data)._pdf(params)
 
@@ -174,7 +198,7 @@ class Model(hypney.Element):
             )
         return self._diff_rate(self.data, params) / self.rate(params)
 
-    def cdf(self, params: dict = None, data: np.ndarray = None) -> np.ndarray:
+    def cdf(self, params: dict = None, data: np.ndarray = NotChanged) -> np.ndarray:
         params = self.validate_params(params)
         return self(data=data)._cdf(params)
 
@@ -183,9 +207,9 @@ class Model(hypney.Element):
 
     # Methods not taking data
 
-    def rate(self, params: dict = None, cut=None) -> np.ndarray:
+    def rate(self, params: dict = None, cut=NotChanged) -> np.ndarray:
         params = self.validate_params(params)
-        return self._rate(params) * self.cut_efficiency(params=params, cut=cut)
+        return self._rate(params) * self(cut=cut).cut_efficiency(params=params)
 
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
@@ -198,30 +222,29 @@ class Model(hypney.Element):
         raise NotImplementedError
 
     def cut_efficiency(
-        self, params=None, cut=None,
+        self, params=None, cut=NotChanged,
     ):
         params = self.validate_params(params)
-        cut = self.validate_cut(cut)
-        if cut is None:
-            return 1.0
-        return self._cut_efficiency(params, cut)
+        return self(cut=cut)._cut_efficiency(params)
 
-    def _cut_efficiency(self, params, cut):
+    def _cut_efficiency(self, params):
+        if self.cut is NoCut:
+            return 1.0
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")
         # Evaluate CDF at rectangle endpoints, add up with alternating signs,
         # always + in upper right.
         # TODO: Not sure this is correct for n > 2!
         # (for n=3 looks OK, for higher n I can't draw/visualize)
-        lower_sign = (-1) ** (len(cut))
+        lower_sign = (-1) ** (len(self.cut))
         signs, points = zip(
             *[
                 (
                     np.prod(indices),
-                    [c[int(0.5 * j + 0.5)] for (c, j) in zip(cut, indices)],
+                    [c[int(0.5 * j + 0.5)] for (c, j) in zip(self.cut, indices)],
                 )
                 for indices in itertools.product(
-                    *[[lower_sign, -lower_sign]] * len(cut)
+                    *[[lower_sign, -lower_sign]] * len(self.cut)
                 )
             ]
         )
