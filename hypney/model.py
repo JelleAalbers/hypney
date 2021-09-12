@@ -23,6 +23,10 @@ class Observable(ty.NamedTuple):
 DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
 
 
+class _not_changed:
+    pass
+
+
 @export
 class Model(hypney.Element):
 
@@ -45,12 +49,15 @@ class Model(hypney.Element):
         self._set_defaults(new_defaults)
         self._set_data(data)
 
-    def __call__(self, name=None, data=None, **new_defaults):
+    def __call__(self, name=_not_changed, data=_not_changed, **new_defaults):
         """Return a model with possibly changed name, defaults, or data"""
-        if name is None and data is None and not new_defaults:
+        # If the user explicitly sets data=None, it would be ambiguous:
+        # should we return a model with the same default, or with data 'unset'?
+        # Hence the funny _not_changed default argument instead of None
+        if name is _not_changed and data is _not_changed and not new_defaults:
             return self
         new_self = copy(self)
-        if name is not None:
+        if name is not _not_changed:
             new_self.name = name
         new_self._set_defaults(new_defaults)
         new_self._set_data(data)
@@ -66,6 +73,8 @@ class Model(hypney.Element):
     # Validation
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
+        if data is None:
+            raise ValueError("None is not valid as data")
         # Shorthand data specifications
         try:
             len(data)

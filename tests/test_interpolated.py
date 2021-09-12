@@ -15,7 +15,7 @@ def test_interpolated():
     assert m.rate() == 1000.0
 
     # TODO: Derive these analytically. But they look plausible.
-    x = [-0.01, 0.01, 0.49, 0.51, 0.99, 1.01, 1.49, 1.51]
+    x = np.array([-0.01, 0.01, 0.49, 0.51, 0.99, 1.01, 1.49, 1.51])
     y = np.array([0, 0.6, 0.6, 1.0, 1.0, 0.4, 0.4, 0.0])
 
     m2 = m(data=x)
