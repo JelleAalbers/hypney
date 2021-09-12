@@ -73,10 +73,6 @@ class Mixture(AssociativeCombination):
         self.models = tuple([m(data=self.data) for m in self.models])
         super()._init_data()
 
-    ##
-    # Simulation
-    ##
-
     def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
         n_from = np.random.multinomial(size, self._f_per_model(params))
         return np.concatenate(
@@ -85,10 +81,6 @@ class Mixture(AssociativeCombination):
                 for _n, (m, ps) in zip(n_from, self._iter_models_params(params))
             ]
         )
-
-    ##
-    # Main statistical methods
-    ##
 
     def _rate(self, params: dict) -> np.ndarray:
         return sum(self._rate_per_model(params))

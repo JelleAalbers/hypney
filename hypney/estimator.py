@@ -8,39 +8,54 @@ export, __all__ = hypney.exporter()
 
 @export
 class Estimator:
-    def __init__(self, statistic):
-        self.statistic = statistic
+    stat: hypney.Statistic
+
+    def __init__(self, statistic, fix: dict = None):
+        self.stat = statistic
+
+        if fix is None:
+            fix = dict()
+        else:
+            fix = self.stat.validate_params(fix, set_defaults=False)
+        self.fix = fix
 
 
 @export
 class Minimum(Estimator):
     sign = 1
 
+    def _free_params(self):
+        return [p for p in self.stat.param_specs if p.name not in self.fix]
+
     def __call__(self, data):
-        guess = np.array([p.default for p in self.statistic.params])
-        bounds = [(p.min, p.max) for p in self.statistic.params]
+        stat = self.stat(data=data)
+        guess = np.array([p.default for p in self._free_params()])
+        bounds = [(p.min, p.max) for p in self._free_params()]
 
         if hasattr(self.statistic, "compute_with_grad"):
             jac = True
 
             def fun(params):
-                return self.statistic.compute_with_grad(
-                    data=data,
-                    params=self.param_array(params),
-                    grad_wrt=self.statistic.param_names,
+                return stat.compute_with_grad(
+                    params=self._array_to_params(params),
+                    grad_wrt=self.stat.param_names,
                 )
 
         else:
             jac = None
 
             def fun(params):
-                return self.statistic(data=data, params=self.param_array(params))
+                return stat(params=self._array_to_params(params))
 
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)
 
         if result.success:
             return result.x
         raise ValueError(f"Optimizer failed: {result.message}")
+
+    def _array_to_params(self, x: np.ndarray):
+        params = {p.name: x[i] for i, p in enumerate(self._free_params())}
+        return {**params, **self.fix}
 
 
 @export

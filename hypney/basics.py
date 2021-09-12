@@ -86,15 +86,25 @@ class Element:
     def _init_data(self):
         pass
 
-    def validate_params(self, params: dict) -> dict:
+    def validate_params(self, params: dict, set_defaults=True) -> dict:
         if params is None:
             params = dict()
         if not isinstance(params, dict):
             raise ValueError(f"Params must be a dict, got {type(params)}")
 
-        # Set defaults for missing params
+        if set_defaults:
+            for p in self.param_specs:
+                params.setdefault(p.name, p.default)
+
+        # Bounds check
         for p in self.param_specs:
-            params.setdefault(p.name, p.default)
+            if p.name not in params:
+                continue
+            val = params[p.name]
+            if not p.min <= params[p.name] < p.max:
+                raise ValueError(
+                    f"{val} is out of bounds {(p.min, p.max)} for {p.name}"
+                )
 
         # Flag spurious parameters
         spurious = set(params.keys()) - set(self.param_names)

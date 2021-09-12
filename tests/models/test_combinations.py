@@ -42,7 +42,7 @@ def test_tensor_product():
     m2 = hypney.Uniform(rate=20)
     m3 = hypney.Uniform(rate=30)
 
-    prod = hypney.TensorProduct(m1, m2, m3)
+    prod = m1 ** m2 ** m3
 
     data = np.array([[0, 0, 0], [1, 1, 1]])
 
