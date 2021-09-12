@@ -70,6 +70,9 @@ class Model(hypney.Element):
     def __add__(self, other):
         return hypney.Mixture(self, other)
 
+    def __pow__(self, other):
+        return hypney.TensorProduct(self, other)
+
     def _has_redefined(self, method_name):
         """Returns if method_name is redefined from Model.method_name"""
         f = getattr(self, method_name)
@@ -143,6 +146,7 @@ class Model(hypney.Element):
 
     def _simulate(self, params):
         if self.simulate_partially_efficient:
+            print("Untested!")
             mu = self.rate_before_efficiencies(params)
             n = np.random.poisson(mu)
             events, p_keep = self.simulate_p_keep(params, size=n)
@@ -150,9 +154,9 @@ class Model(hypney.Element):
             return events
 
         else:
-            mu = self.rate(params)
+            mu = self._rate(params)
             n = np.random.poisson(mu)
-            data = self.rvs(params, size=n)
+            data = self._rvs(params, size=n)
             assert len(data) == n
             data = self.apply_cut(data)
 
@@ -218,6 +222,9 @@ class Model(hypney.Element):
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
     def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
+        if self.simulate_partially_efficient:
+            # Could simulate an excess of events, remove unneeded ones?
+            raise NotImplementedError
         params = self.validate_params(params)
         return self._rvs(params, size)
 

@@ -89,6 +89,8 @@ class Interpolation(hypney.Model):
             if self._has_redefined(method_name):
                 self._build_interpolator(method_name)
 
+        super()._init_data()
+
     def _init_cut(self):
         if self.data is not None:
             self._init_data()
@@ -132,7 +134,13 @@ class Interpolation(hypney.Model):
             # then mix rvs call with different weights?
             # Sounds tricky.
             raise NotImplementedError("Can only simulate at anchor models")
-        return self.anchor_models[anchor].rvs(size=size)
+        return self.anchor_models[anchor]._rvs(size=size)
+
+    def _simulate(self, params: dict = None) -> np.ndarray:
+        anchor = self._params_to_anchor_tuple(params)
+        if anchor not in self.anchor_models:
+            raise NotImplementedError("Can only simulate at anchor models")
+        return self.anchor_models[anchor]._simulate(params)
 
 
 for method_name in (
