@@ -216,9 +216,9 @@ class Model(hypney.Element):
 
     def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
         params = self.validate_params(params)
-        return self.rvs(params, size)
+        return self._rvs(params, size)
 
-    def _rvs(params, size):
+    def _rvs(self, params, size):
         raise NotImplementedError
 
     def cut_efficiency(

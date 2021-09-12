@@ -1,3 +1,4 @@
+from types import DynamicClassAttribute
 import typing as ty
 
 import numpy as np
@@ -52,6 +53,14 @@ class Mixture(hypney.Model):
 
         super().__init__(name="mix_" + "_".join(self.model_names))
 
+    def init_data(self):
+        self.models = tuple([m(data=self.data) for m in self.models])
+        super().init_data()
+
+    def init_cut(self):
+        self.models = tuple([m(cut=self.cut) for m in self.models])
+        super().init_cut()
+
     def iter_models_params(self, params):
         for m, param_map in zip(self.models, self.param_mapping.values()):
             yield m, {
@@ -59,49 +68,39 @@ class Mixture(hypney.Model):
                 for pname_in_model, pname_in_mixture in param_map
             }
 
-    def rate_per_model(self, params: dict = None, *, cut=hypney.NotChanged) -> np.ndarray:
-        params = self.validate_params(params)
+    def rate_per_model(self, params: dict) -> np.ndarray:
         return np.array(
-            [m(cut=cut).rate(ps) for m, ps in self.iter_models_params(params)]
+            [m._rate(ps) for m, ps in self.iter_models_params(params)]
         )
 
-    def rate(self, params: dict = None, *, cut=hypney.NotChanged) -> np.ndarray:
-        return sum(self(cut=cut).rate_per_model(params))
+    def _rate(self, params: DynamicClassAttribute) -> np.ndarray:
+        return sum(self.rate_per_model(params))
 
     def f_per_model(self, params):
         mus = self.rate_per_model(params)
         return mus / mus.sum()
 
-    def pdf(self, params: dict = None, data: np.ndarray = hypney.NotChanged) -> np.ndarray:
-        params = self.validate_params(params)
+    def _pdf(self, params: dict) -> np.ndarray:
         return np.average(
-            [m.pdf(params=ps, data=data) for m, ps in self.iter_models_params(params)],
+            [m._pdf(params=ps) for m, ps in self.iter_models_params(params)],
             axis=0,
             weights=self.f_per_model(params),
         )
 
-    def cdf(self, params: dict = None, data: np.ndarray = hypney.NotChanged) -> np.ndarray:
-        # TODO: check.. and we're duplicating most of pdf...
-        params = self.validate_params(params)
+    def _cdf(self, params: dict) -> np.ndarray:
         return np.average(
-            [m.cdf(params=ps, data=data) for m, ps in self.iter_models_params(params)],
+            [m._cdf(params=ps) for m, ps in self.iter_models_params(params)],
             axis=0,
             weights=self.f_per_model(params),
         )
 
-    def diff_rate(
-        self, params: dict = None, data: np.ndarray = hypney.NotChanged, *, cut=hypney.NotChanged,
-    ) -> np.ndarray:
-        params = self.validate_params(params)
+    def _diff_rate(self, params: dict) -> np.ndarray:
         return np.sum(
-            [
-                m(cut=cut, data=data).diff_rate(params=ps)
-                for m, ps in self.iter_models_params(params)
-            ],
+            [m._diff_rate(params=ps) for m, ps in self.iter_models_params(params)],
             axis=0,
         )
 
-    def simulate(self, params: dict = None, *, cut=hypney.NotChanged) -> np.ndarray:
+    def simulate(self, params: dict, *, cut=hypney.NotChanged) -> np.ndarray:
         params = self.validate_params(params)
         return np.concatenate(
             [
@@ -111,12 +110,11 @@ class Mixture(hypney.Model):
             axis=0,
         )
 
-    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
-        params = self.validate_params(params)
+    def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
         n_from = np.random.multinomial(size, self.f_per_model(params))
         return np.concatenate(
             [
-                m.rvs(params=ps, size=_n)
+                m._rvs(params=ps, size=_n)
                 for _n, (m, ps) in zip(n_from, self.iter_models_params(params))
             ]
         )

@@ -90,7 +90,9 @@ class Interpolation(hypney.Model):
                 self._build_interpolator(method_name)
 
     def init_cut(self):
-        return self.init_data(self)
+        if self.data is not None:
+            self.init_data()
+        super().init_cut()
 
     def _build_interpolator(self, itp_name: str):
         # Make sure to call non-underscored methods of the anchor models,
@@ -121,8 +123,7 @@ class Interpolation(hypney.Model):
         """
         return getattr(self.anchor_models[param_tuple], method_name)()
 
-    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
-        params = self.validate_params(params)
+    def _rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
         anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             # Dig into interpolator to get weight for each anchor,
