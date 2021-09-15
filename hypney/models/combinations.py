@@ -1,3 +1,4 @@
+import collections
 import typing as ty
 
 import numpy as np
@@ -32,7 +33,7 @@ class AssociativeCombination(hypney.Model):
 
         self.observables = self._init_observables()
 
-        self.param_specs, self.param_mapping = hypney.combine_param_specs(
+        self.param_specs, self.param_mapping = combine_param_specs(
             models, self.model_names
         )
 
@@ -160,3 +161,39 @@ class TensorProduct(AssociativeCombination):
         return np.product(
             [m._cdf(ps) for m, ps in self._iter_models_params(params)], axis=0
         )
+
+
+@export
+def combine_param_specs(elements, names=None, share_all=False):
+    """Return param spec, mapping for new model made of other models
+    Mapping is name -> (old name, new name)
+
+    Clashing unshared parameter names are renamed elementname_paramname
+    For shared params, defaults and bounds are taken from
+    the earliest model in the combination
+    """
+    if names is None:
+        names = [e.name if e.name else str(i) for i, e in enumerate(elements)]
+    all_names = sum([list(m.param_names) for m in elements], [])
+    name_count = collections.Counter(all_names)
+    unique = [pn for pn, count in name_count.items() if count == 1]
+    specs = []
+    pmap = dict()
+    seen = []
+    for m, name in zip(elements, names):
+        pmap[name] = []
+        for p in m.param_specs:
+            if p.name in unique or p.share or share_all:
+                pmap[name].append((p.name, p.name))
+                if p.name not in seen:
+                    specs.append(p)
+                    seen.append(p.name)
+            else:
+                new_name = name + "_" + p.name
+                pmap[name].append((p.name, new_name))
+                specs.append(
+                    hypney.ParameterSpec(
+                        name=new_name, min=p.min, max=p.max, default=p.default
+                    )
+                )
+    return tuple(specs), pmap

@@ -4,9 +4,9 @@ import numpy as np
 
 def test_interpolated():
     def builder(params):
-        return hypney.Uniform(**params, rate=1000)
+        return hypney.models.Uniform(**params, rate=1000)
 
-    m = hypney.Interpolation(builder, param_specs=dict(loc=(-0.5, 0, 0.5)))
+    m = hypney.models.Interpolation(builder, param_specs=dict(loc=(-0.5, 0, 0.5)))
 
     data = m.simulate()
     assert len(data)
@@ -23,7 +23,7 @@ def test_interpolated():
     np.testing.assert_array_almost_equal(m2.diff_rate(params=dict(loc=0.2)), y * 1000.0)
 
     # Test two dimensions of anchors
-    m2 = hypney.Interpolation(
+    m2 = hypney.models.Interpolation(
         builder, param_specs=dict(loc=(-0.5, 0, 0.5), scale=(0.5, 1, 1.5)), data=x
     )
 

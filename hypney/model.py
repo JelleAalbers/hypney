@@ -11,14 +11,23 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class Model(hypney.Element):
-
+class Model(hypney.DataContainer):
+    name: str = ""
+    param_specs: ty.Tuple[hypney.ParameterSpec] = (hypney.DEFAULT_RATE_PARAM,)
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     cut: ty.Union[hypney.NoCut, tuple] = hypney.NoCut
 
     @property
     def n_dim(self):
         return len(self.observables)
+
+    @property
+    def param_names(self):
+        return tuple([p.name for p in self.param_specs])
+
+    @property
+    def defaults(self):
+        return {p.name: p.default for p in self.param_specs}
 
     ##
     # Initialization
@@ -43,8 +52,14 @@ class Model(hypney.Element):
         if cut is not NotChanged:
             self._set_cut(cut)
 
-        self._set_defaults(new_defaults)
-        self._set_data(data)
+        self._validate_and_set_defaults(new_defaults)
+        super().__init__(data=data)
+
+    def _validate_and_set_defaults(self, new_defaults: dict):
+        new_defaults = self.validate_params(new_defaults)
+        self.param_specs = tuple(
+            [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
+        )
 
     def __call__(
         self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults
@@ -60,7 +75,7 @@ class Model(hypney.Element):
         new_self = copy(self)
         if name is not NotChanged:
             new_self.name = name
-        new_self._set_defaults(new_defaults)
+        new_self._validate_and_set_defaults(new_defaults)
         if data is not NotChanged:
             new_self._set_data(data)
         if cut is not NotChanged:
@@ -68,10 +83,10 @@ class Model(hypney.Element):
         return new_self
 
     def __add__(self, other):
-        return hypney.Mixture(self, other)
+        return hypney.models.Mixture(self, other)
 
     def __pow__(self, other):
-        return hypney.TensorProduct(self, other)
+        return hypney.models.TensorProduct(self, other)
 
     def _has_redefined(self, method_name):
         """Returns if method_name is redefined from Model.method_name"""
@@ -91,6 +106,33 @@ class Model(hypney.Element):
     ##
     # Input validation
     ##
+
+    def validate_params(self, params: dict, set_defaults=True) -> dict:
+        if params is None:
+            params = dict()
+        if not isinstance(params, dict):
+            raise ValueError(f"Params must be a dict, got {type(params)}")
+
+        if set_defaults:
+            for p in self.param_specs:
+                params.setdefault(p.name, p.default)
+
+        # Bounds check
+        for p in self.param_specs:
+            if p.name not in params:
+                continue
+            val = params[p.name]
+            if not p.min <= params[p.name] < p.max:
+                raise ValueError(
+                    f"{val} is out of bounds {(p.min, p.max)} for {p.name}"
+                )
+
+        # Flag spurious parameters
+        spurious = set(params.keys()) - set(self.param_names)
+        if spurious:
+            raise ValueError(f"Unknown parameters {spurious} passed")
+
+        return params
 
     def validate_data(self, data: np.ndarray) -> np.ndarray:
         if data is None:

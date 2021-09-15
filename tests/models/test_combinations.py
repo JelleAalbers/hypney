@@ -4,11 +4,11 @@ import numpy as np
 
 
 def test_mixture():
-    m1 = hypney.Uniform(rate=40)
-    m2 = hypney.Uniform(rate=20)
-    m3 = hypney.Uniform(rate=30)
+    m1 = hypney.models.Uniform(rate=40)
+    m2 = hypney.models.Uniform(rate=20)
+    m3 = hypney.models.Uniform(rate=30)
 
-    mix = hypney.Mixture(m1, m2)
+    mix = hypney.models.Mixture(m1, m2)
     # assert mix.param_names == (
     #     "m0_expected_events", "m0_loc", "m1_expected_events")
 
@@ -38,9 +38,9 @@ def test_mixture():
 
 
 def test_tensor_product():
-    m1 = hypney.Uniform(rate=40)
-    m2 = hypney.Uniform(rate=20)
-    m3 = hypney.Uniform(rate=30)
+    m1 = hypney.models.Uniform(rate=40)
+    m2 = hypney.models.Uniform(rate=20)
+    m3 = hypney.models.Uniform(rate=30)
 
     prod = m1 ** m2 ** m3
 

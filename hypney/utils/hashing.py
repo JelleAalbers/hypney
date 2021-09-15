@@ -31,7 +31,7 @@ def hashablize(obj):
 
 @export
 class NumpyJSONEncoder(json.JSONEncoder):
-    """ Special json encoder for numpy types
+    """Special json encoder for numpy types
     Edited from mpl3d: mpld3/_display.py
     """
 

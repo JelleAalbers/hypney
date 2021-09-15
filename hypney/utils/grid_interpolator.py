@@ -24,8 +24,7 @@ class GridInterpolator:
         self.anchor_z_grid = arrays_to_grid(self.anchor_z_arrays)
 
     def get_anchor_points(self):
-        """Returns list of tuples of anchor coordinates
-        """
+        """Returns list of tuples of anchor coordinates"""
         return [zs for _, zs in self._anchor_grid_iterator()]
 
     def make_interpolator(self, f, inputs_at_anchors=None):
@@ -76,6 +75,5 @@ class GridInterpolator:
 
 
 def arrays_to_grid(arrs):
-    """Convert a list of n 1-dim arrays to an n+1-dim. array, where last dimension denotes coordinate values at point.
-    """
+    """Convert a list of n 1-dim arrays to an n+1-dim. array, where last dimension denotes coordinate values at point."""
     return np.stack(np.meshgrid(*arrs, indexing="ij"), axis=-1)

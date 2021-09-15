@@ -17,6 +17,7 @@ class Interpolation(hypney.Model):
 
     def __init__(
         self,
+        # Called with params, outputs model
         model_builder: callable,
         param_specs: ty.Union[tuple, dict],
         *args,
@@ -123,8 +124,7 @@ class Interpolation(hypney.Model):
         return tuple([params[p.name] for p in self.param_specs if p.anchors])
 
     def _call_anchor_method(self, method_name, param_tuple):
-        """Call Model.method_name for anchor model at params
-        """
+        """Call Model.method_name for anchor model at params"""
         return getattr(self.anchor_models[param_tuple], method_name)()
 
     def _rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
