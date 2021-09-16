@@ -14,7 +14,7 @@ class LogLikelihood(hypney.Statistic):
 
 
 @export
-class LogLikelihoodRatio(hypney.Statistic):
+class LikelihoodRatio(hypney.Statistic):
     def __init__(self, *args, max_estimator=None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -33,7 +33,9 @@ class LogLikelihoodRatio(hypney.Statistic):
 
 
 @export
-class LogProfileLikelihoodRatio(LogLikelihoodRatio):
+class PLR(LikelihoodRatio):
+    # Dangerous! Goes down then up with rate poi, not nice / rectified / whatever
+
     def __init__(self, *args, poi=tuple(), **kwargs):
         if isinstance(poi, str):
             poi = (poi,)
@@ -51,3 +53,42 @@ class LogProfileLikelihoodRatio(LogLikelihoodRatio):
 
     def _build_dist(self):
         return hypney.models.Chi2(df=len(self.poi))
+
+
+class PLROrZero(PLR):
+    def __init__(self, *args, zero_if="high", **kwargs):
+        super().__init__(*args, **kwargs)
+        assert zero_if in ("high", "low")
+        self.zero_if = zero_if
+        assert len(self.poi) == 1
+
+    def _compute(self, params):
+        result = super()._compute(params)
+        saw_high = params[self.poi] > self.bestfit[self.poi]
+        if saw_high == (self.zero_if == "high"):
+            return 0
+        return result
+
+    def _build_dist():
+        return hypney.models.DiracDelta(rate=0.5) + hypney.models.Chi2(df=1, rate=0.5)
+
+
+@export
+class SignedPLR(PLR):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assert len(self.poi) == 1
+
+    def _compute(self, params):
+        result = super()._compute(params)
+        if params[self.poi] > self.bestfit[self.poi]:
+            # High / Excess hypothesis (if poi ~ rate)
+            return result
+        else:
+            # Low / Deficit hypothesis (if poi ~ rate)
+            return -result
+
+    def _build_dist():
+        return hypney.models.transform_data(
+            hypney.models.Chi2(df=1, rate=0.5), lambda x: -x
+        ) + hypney.models.Chi2(df=1, rate=0.5)

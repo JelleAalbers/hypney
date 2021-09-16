@@ -17,6 +17,12 @@ class Model(hypney.DataContainer):
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     cut: ty.Union[hypney.NoCut, tuple] = hypney.NoCut
 
+    def param_spec_for(self, pname):
+        for p in self.param_specs:
+            if p.name == pname:
+                return p
+        raise ValueError(f"Unknown parameter {pname}")
+
     @property
     def n_dim(self):
         return len(self.observables)
@@ -204,9 +210,30 @@ class Model(hypney.DataContainer):
 
         return data
 
+    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
+        if self.simulate_partially_efficient:
+            # Could simulate an excess of events, remove unneeded ones?
+            raise NotImplementedError
+        params = self.validate_params(params)
+        return self._rvs(params, size)
+
+    def _rvs(self, params: dict, size: int):
+        raise NotImplementedError
+
     ##
-    # Methods taking data
+    # Methods using data
     ##
+
+    def apply_cut(self, data=NotChanged, cut=NotChanged):
+        return self(data=data, cut=cut)._apply_cut()
+
+    def _apply_cut(self):
+        if self.cut == hypney.NoCut:
+            return self.data
+        passed = np.ones(len(self.data), np.bool_)
+        for dim_i, (l, r) in enumerate(self.cut):
+            passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
+        return self.data[passed]
 
     def diff_rate(
         self, params: dict = None, data: np.ndarray = NotChanged, *, cut=NotChanged
@@ -221,17 +248,6 @@ class Model(hypney.DataContainer):
                 "neither _pdf nor _diff_rate"
             )
         return self._pdf(params=params) * self._rate(params=params)
-
-    def apply_cut(self, data=NotChanged, cut=NotChanged):
-        return self(data=data, cut=cut)._apply_cut()
-
-    def _apply_cut(self):
-        if self.cut is hypney.NoCut:
-            return self.data
-        passed = np.ones(len(self.data), np.bool_)
-        for dim_i, (l, r) in enumerate(self.cut):
-            passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
-        return self.data[passed]
 
     def pdf(self, params: dict = None, data: np.ndarray = NotChanged) -> np.ndarray:
         params = self.validate_params(params)
@@ -253,7 +269,7 @@ class Model(hypney.DataContainer):
         raise NotImplementedError
 
     ##
-    # Methods not taking data
+    # Methods not using data
     ##
 
     def rate(self, params: dict = None, cut=NotChanged) -> np.ndarray:
@@ -262,16 +278,6 @@ class Model(hypney.DataContainer):
 
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
-
-    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
-        if self.simulate_partially_efficient:
-            # Could simulate an excess of events, remove unneeded ones?
-            raise NotImplementedError
-        params = self.validate_params(params)
-        return self._rvs(params, size)
-
-    def _rvs(self, params: dict, size: int):
-        raise NotImplementedError
 
     def cut_efficiency(
         self, params: dict = None, cut=NotChanged,

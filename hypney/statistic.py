@@ -36,7 +36,7 @@ class Statistic(hypney.DataContainer):
 
         if dist is None and hasattr(self, "_build_dist"):
             self.dist = hypney.transform_parameters(
-                self._build_dist(), self._dist_params
+                self._build_dist(), self._dist_params, self.model.param_spec
             )
         else:
             self.dist = dist

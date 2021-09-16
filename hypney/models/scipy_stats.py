@@ -8,16 +8,9 @@ import hypney
 export, __all__ = hypney.exporter()
 
 
-standard_param_specs = (
-    hypney.DEFAULT_RATE_PARAM,
-    hypney.ParameterSpec(name="loc", min=-float("inf"), max=float("inf"), default=0),
-    hypney.ParameterSpec(name="scale", min=0, max=float("inf"), default=1),
-)
-
-
 class ScipyUnivariate(hypney.Model):
     dist: ty.Union[stats.rv_continuous, stats.rv_discrete]
-    param_specs = standard_param_specs
+    param_specs = hypney.RATE_LOC_SCALE_PARAMS
 
     def _dist_params(self, params):
         return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
@@ -64,14 +57,12 @@ for dname in dir(stats):
     # Discrete distributions don't have a scale parameter.
     # We'll assume shape parameters are positive and have default 0...
     # TODO: this can't always be true!
-    spec = list(standard_param_specs[:2] if is_discrete else standard_param_specs)
+    spec = list(hypney.RATE_LOC_PARAMS if is_discrete else hypney.RATE_LOC_SCALE_PARAMS)
     if dist.shapes:
         for pname in dist.shapes.split(", "):
             spec.append(
                 hypney.ParameterSpec(name=pname, min=0, max=float("inf"), default=0)
             )
-
-            standard_param_specs[:2]
 
     # Create the new class
     dname = dname.capitalize()

@@ -9,6 +9,8 @@ export, __all__ = hypney.exporter()
 
 
 class AssociativeCombination(hypney.Model):
+    """Model formed from other models using some associative operation"""
+
     models: ty.Tuple[hypney.Model]
     model_names: ty.Tuple[str]
 
@@ -51,6 +53,10 @@ class AssociativeCombination(hypney.Model):
 
 @export
 class Mixture(AssociativeCombination):
+    """Model that is a mixture of other models;
+        that is, events from all constituent models are observed simultaneously.
+    """
+
     def _init_observables(self):
         assert all(
             [m.n_dim == self.models[0].n_dim for m in self.models]
@@ -120,6 +126,12 @@ class Mixture(AssociativeCombination):
 
 @export
 class TensorProduct(AssociativeCombination):
+    """Model for which constituent models describe independent observables
+        observed simultaneously for each event.
+        (e.g. one model for energy, another for time)
+        The first model will control the overall event rate.
+    """
+
     def _init_observables(self):
         new_obs = []
         for m in self.models:

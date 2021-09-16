@@ -11,6 +11,9 @@ export, __all__ = hypney.exporter()
 
 @export
 class Interpolation(hypney.Model):
+    """Model which interpolates between other models, depending on parameters.
+        The pdf, cdf, rate, etc. are interpolators, evaluated at anchor points
+    """
 
     data_methods_to_interpolate = "_pdf _cdf _diff_rate".split()
     other_methods_to_interpolate = "_rate ".split()

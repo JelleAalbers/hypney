@@ -6,7 +6,14 @@ import numpy as np
 import hypney as hp
 
 
-export, __all__ = hp.exporter(also_export=["DEFAULT_RATE_PARAM", "DEFAULT_OBSERVABLE"])
+export, __all__ = hp.exporter(
+    also_export=[
+        "DEFAULT_RATE_PARAM",
+        "DEFAULT_OBSERVABLE",
+        "RATE_LOC_PARAMS",
+        "RATE_LOC_SCALE_PARAMS",
+    ]
+)
 
 
 @export
@@ -31,7 +38,16 @@ class ParameterSpec(ty.NamedTuple):
     anchors: tuple = tuple()  # Values at which model is most accurate
 
 
-DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=10)
+DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=1.0)
+
+RATE_LOC_PARAMS = (
+    DEFAULT_RATE_PARAM,
+    ParameterSpec(name="loc", min=-float("inf")),
+)
+
+RATE_LOC_SCALE_PARAMS = RATE_LOC_PARAMS + (
+    ParameterSpec(name="scale", min=0, max=float("inf"), default=1),
+)
 
 
 @export
