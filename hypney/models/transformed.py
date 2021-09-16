@@ -51,7 +51,8 @@ class TransformedModel(hypney.Model):
         if transform_data is not hypney.NotChanged:
             self._transform_data = transform_data
         if orig_model is not hypney.NotChanged:
-            # No need to make a copy now; any change in state will trigger that
+            # No need to make a copy now; any attempted state change
+            # (set data, cut, change defaults...) will trigger that
             self._orig_model = orig_model
         kwargs.setdefault("observables", self._orig_model.observables)
         kwargs.setdefault("param_specs", self._orig_model.param_specs)
@@ -74,7 +75,9 @@ class TransformedModel(hypney.Model):
     def _check_reverse_transform(self):
         if not self._has_redefined(
             "_transform_data", from_base=TransformedModel
-        ) and not self._has_redefined("_reverse_transform_data", from_base=TransformedModel):
+        ) and not self._has_redefined(
+            "_reverse_transform_data", from_base=TransformedModel
+        ):
             raise NotImplementedError("Missing reverse transformation")
 
     def _simulate(self, params):
@@ -98,13 +101,15 @@ class TransformedModel(hypney.Model):
         if self.cut == hypney.NoCut:
             return self.data
         # If we get here, we're not transforming data -- see init_cut.
-        assert not self._has_redefined('_transform_data')
+        assert not self._has_redefined("_transform_data")
         return super()._apply_cut()
 
     def _check_transform_data_jac_det(self):
         if not self._has_redefined(
             "_transform_data", from_base=TransformedModel
-        ) and not self._has_redefined("_transform_data_jac_det", from_base=TransformedModel):
+        ) and not self._has_redefined(
+            "_transform_data_jac_det", from_base=TransformedModel
+        ):
             raise NotImplementedError("Jacobian determinant missing")
 
     def _pdf(self, params):

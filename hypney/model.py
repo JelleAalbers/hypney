@@ -67,9 +67,9 @@ class Model(hypney.DataContainer):
             [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
         )
 
-    def __call__(
-        self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults
-    ):
+    # TODO: freeze is a poor name, can change things twice...
+    # copy is worse since we may not copy
+    def freeze(self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults):
         """Return a model with possibly changed name, defaults, or data"""
         if (
             name is NotChanged
@@ -87,6 +87,9 @@ class Model(hypney.DataContainer):
         if cut is not NotChanged:
             new_self._set_cut(cut)
         return new_self
+
+    def __call__(self, *args, **kwargs):
+        return self.freeze(*args, **kwargs)
 
     def __add__(self, other):
         return hypney.models.Mixture(self, other)

@@ -9,3 +9,4 @@ from .statistic import *
 from . import stats
 
 from .estimator import *
+from . import ests

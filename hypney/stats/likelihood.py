@@ -19,7 +19,7 @@ class LikelihoodRatio(hypney.Statistic):
         super().__init__(*args, **kwargs)
 
         if max_estimator is None:
-            max_estimator = hypney.Maximum
+            max_estimator = hypney.ests.Maximum
         self.max_estimator = max_estimator
         self.ll = LogLikelihood(self.model)
         self.mle = self.max_estimator(self.ll)

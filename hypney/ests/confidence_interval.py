@@ -13,7 +13,7 @@ class UpperLimit(hypney.Estimator):
         super().__init__(*args, **kwargs)
 
     def __call__(self, data, bestfit):
-        stat = self.stat(data=data)
+        stat = self.stat.freeze(data)
 
         def objective(params):
             return self.cl - stat.dist.cdf(data=stat(params), params=params)
