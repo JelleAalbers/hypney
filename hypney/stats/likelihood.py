@@ -89,6 +89,6 @@ class SignedPLR(PLR):
             return -result
 
     def _build_dist():
-        return hypney.models.transform_data(
-            hypney.models.Chi2(df=1, rate=0.5), lambda x: -x
+        return hypney.models.NegativeData(
+            hypney.models.Chi2(df=1, rate=0.5)
         ) + hypney.models.Chi2(df=1, rate=0.5)

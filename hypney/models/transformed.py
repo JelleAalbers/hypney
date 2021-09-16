@@ -1,3 +1,5 @@
+from copy import copy
+
 import hypney
 
 export, __all__ = hypney.exporter()
@@ -6,6 +8,13 @@ export, __all__ = hypney.exporter()
 @export
 class TransformedModel(hypney.Model):
     """A model which transforms data and/or parameters, then feeds them to another model
+
+    Args (beyond those of Model):
+     - orig_model: original model taking transformed parameters
+     - transform_params: function mapping dict of params the new model takes
+        to dict of params the old model takes
+     - transform_data: function mapping data the new model takes
+        to data the old model takes
     """
 
     # ... maybe we should integrate _transform_params and _transform_data in the base model instead?
@@ -16,8 +25,14 @@ class TransformedModel(hypney.Model):
     def _transform_params(self, params: dict):
         return params
 
-    def _transform_data(self, data):
-        return data
+    def _transform_data(self):
+        return self.data
+
+    def _reverse_transform_data(self, orig_data):
+        return orig_data
+
+    def _transform_data_jac_det(self, params, orig_params):
+        return 1.0
 
     ##
     # Initialization
@@ -25,8 +40,8 @@ class TransformedModel(hypney.Model):
 
     def __init__(
         self,
-        *args,
         orig_model=hypney.NotChanged,
+        *args,
         transform_data=hypney.NotChanged,
         transform_params=hypney.NotChanged,
         **kwargs
@@ -36,13 +51,14 @@ class TransformedModel(hypney.Model):
         if transform_data is not hypney.NotChanged:
             self._transform_data = transform_data
         if orig_model is not hypney.NotChanged:
+            # No need to make a copy now; any change in state will trigger that
             self._orig_model = orig_model
         kwargs.setdefault("observables", self._orig_model.observables)
         kwargs.setdefault("param_specs", self._orig_model.param_specs)
         super().__init__(*args, **kwargs)
 
-    def _init_data(self, data):
-        self._orig_model = self._orig_model(data=self._transform_data(data))
+    def _init_data(self):
+        self._orig_model = self._orig_model(data=self._transform_data())
 
     def _init_cut(self):
         if self._has_redefined("_transform_data") and self.cut != hypney.NoCut:
@@ -55,35 +71,54 @@ class TransformedModel(hypney.Model):
     # Simulation
     ##
 
+    def _check_reverse_transform(self):
+        if not self._has_redefined(
+            "_transform_data", from_base=TransformedModel
+        ) and not self._has_redefined("_reverse_transform_data", from_base=TransformedModel):
+            raise NotImplementedError("Missing reverse transformation")
+
     def _simulate(self, params):
-        if self._has_redefined('_transform_data'):
-            raise NotImplementedError("Simulating transformed data requires inverse transformation")
-        return self._orig_model._simulate(self._transform_params(params))
+        self._check_reverse_transform()
+        return self._reverse_transform_data(
+            self._orig_model._simulate(self._transform_params(params))
+        )
 
     def _rvs(self, params, size):
-        if self._has_redefined('_transform_data'):
-            raise NotImplementedError("Simulating transformed data requires inverse transformation")
-        return self._orig_model._rvs(self._transform_params(params), size)
+        self._check_reverse_transform()
+        return self._reverse_transform_data(
+            self._orig_model._rvs(self._transform_params(params), size)
+        )
 
     ##
     # Methods using data
     ##
 
     def _apply_cut(self):
-        return self._orig_model._apply_cut()
+        # See init_cut: cut is NoCut, or we don't transform the data
+        if self.cut == hypney.NoCut:
+            return self.data
+        # If we get here, we're not transforming data -- see init_cut.
+        assert not self._has_redefined('_transform_data')
+        return super()._apply_cut()
 
-    def _diff_rate(self, params: dict):
-        if self._has_redefined('_transform_data'):
-            raise NotImplementedError("diff rate in transformed data requires Jacobian")
-        return self._orig_model._diff_rate(self._transform_params(params=params))
+    def _check_transform_data_jac_det(self):
+        if not self._has_redefined(
+            "_transform_data", from_base=TransformedModel
+        ) and not self._has_redefined("_transform_data_jac_det", from_base=TransformedModel):
+            raise NotImplementedError("Jacobian determinant missing")
 
     def _pdf(self, params):
-        if self._has_redefined('_transform_data'):
-            raise NotImplementedError("PDF in transformed data requires Jacobian")
-        return self._orig_model._pdf(self._transform_params(params))
+        self._check_transform_data_jac_det()
+        orig_params = self._transform_params(params)
+        return self._orig_model._pdf(orig_params) * self._transform_data_jac_det(
+            params, orig_params
+        )
 
     def _cdf(self, params):
-        # For non-increasing transformations this will be invalid...
+        if self._has_redefined("_transform_data", from_base=TransformedModel):
+            raise NotImplementedError(
+                "Don't know how to define CDF for generic transformation"
+            )
         return self._orig_model._cdf(self._transform_params(params))
 
     ##
@@ -98,42 +133,16 @@ class TransformedModel(hypney.Model):
 
 
 @export
-def transform_params(
-    orig_model: hypney.Model, transform_f: callable, param_specs: tuple, **kwargs
-):
-    """Return a new model which transforms params, then feeds them to orig_model
+class NegativeData(TransformedModel):
+    def _transform_data(self):
+        return -self.data
 
-    Args:
-     - orig_model: original model taking transformed parameters
-     - transform_f: function mapping dict of params the new model takes
-        to dict of params the old model takes
-     - param_specs: Parameter specification of new model
+    def _reverse_transform_data(self):
+        return -self.data
 
-    """
-    return TransformedModel(
-        wrapped_model=orig_model,
-        transform_params=transform_f,
-        param_specs=param_specs,
-        **kwargs,
-    )
+    def _transform_data_jac_det(self, params, orig_params):
+        return 1
 
-
-@export
-def transform_data(
-    orig_model: hypney.Model, transform_data: callable, observables=None, **kwargs
-):
-    """Return a new model which transforms data, then feeds it to orig_model
-
-    Args:
-     - orig_model: original model taking transformed data
-     - transform_data: function mapping data the new model expects
-        to data the old model expects
-     - observables: Observables of the new model
-        If omitted, assume they do not change. This is likely incorrect for
-        bounded parameters.
-    """
-    if observables:
-        kwargs["observables"] = observables
-    return TransformedModel(
-        wrapped_model=orig_model, transform_data=transform_data, **kwargs,
-    )
+    def _cdf(self, params):
+        assert len(self.observables) == 1
+        return 1 - self._orig_model._cdf(params)

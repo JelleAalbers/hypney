@@ -94,12 +94,14 @@ class Model(hypney.DataContainer):
     def __pow__(self, other):
         return hypney.models.TensorProduct(self, other)
 
-    def _has_redefined(self, method_name):
+    def _has_redefined(self, method_name, from_base=None):
         """Returns if method_name is redefined from Model.method_name"""
+        if from_base is None:
+            from_base = Model
         f = getattr(self, method_name)
         if not hasattr(f, "__func__"):
             return True
-        return f.__func__ is not getattr(Model, method_name)
+        return f.__func__ is not getattr(from_base, method_name)
 
     def _set_cut(self, cut):
         self.cut = self.validate_cut(cut)
