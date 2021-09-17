@@ -46,7 +46,7 @@ RATE_LOC_PARAMS = (
 )
 
 RATE_LOC_SCALE_PARAMS = RATE_LOC_PARAMS + (
-    ParameterSpec(name="scale", min=0, max=float("inf"), default=1),
+    ParameterSpec(name="scale", min=1e-6, max=float("inf"), default=1),
 )
 
 

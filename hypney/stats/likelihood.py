@@ -9,27 +9,27 @@ export, __all__ = hypney.exporter()
 class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
         return -self.model.rate(params) + ep.sum(
-            ep.log(self.model.diff_rate(self.data, params))
+            ep.log(self.model.diff_rate(params=params, data=self.data))
         )
 
 
 @export
 class LikelihoodRatio(hypney.Statistic):
-    def __init__(self, *args, max_estimator=None, **kwargs):
-        super().__init__(*args, **kwargs)
-
+    def __init__(self, model, *args, max_estimator=None, **kwargs):
         if max_estimator is None:
             max_estimator = hypney.ests.Maximum
         self.max_estimator = max_estimator
-        self.ll = LogLikelihood(self.model)
+        self.ll = LogLikelihood(model)
         self.mle = self.max_estimator(self.ll)
+
+        super().__init__(model=model, *args, **kwargs)
 
     def _init_data(self):
         self.bestfit = self.mle(self.data)
-        self.ll_bestfit = self.ll(self.mle, self.data)
+        self.ll_bestfit = self.ll(params=self.bestfit, data=self.data)
 
     def _compute(self, params):
-        return -2 * (self.ll(params, self.data) - self.ll_bestfit)
+        return -2 * (self.ll(params=params, data=self.data) - self.ll_bestfit)
 
 
 @export
@@ -43,6 +43,7 @@ class PLR(LikelihoodRatio):
         super().__init__(*args, **kwargs)
 
     def _filter_poi(self, params):
+        """Return only parameters of interest from params"""
         return {pname: val for pname, val in params.items() if pname in self.poi}
 
     def _compute(self, params):

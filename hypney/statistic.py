@@ -16,7 +16,7 @@ class Statistic(hypney.DataContainer):
 class Statistic(hypney.DataContainer):
     # Is data necessary to compute the statistic on different parameters?
     # e.g. if _init_data computes sufficient summary statistics, it won't be
-    keep_data = False
+    keep_data = True
 
     # Model of the data.
     model: hypney.Model

@@ -12,7 +12,7 @@ class Minimum(hypney.Estimator):
     sign = 1
 
     def _free_params(self):
-        return [p for p in self.stat.param_specs if p.name not in self.fix]
+        return [p for p in self.stat.model.param_specs if p.name not in self.fix]
 
     def __call__(self, data):
         stat = self.stat.freeze(data)
@@ -23,16 +23,19 @@ class Minimum(hypney.Estimator):
             jac = None
 
             def fun(params):
-                return stat(params=self._param_array_to_dict(params))
+                result = (
+                    self.sign
+                    * stat(params=self._param_sequence_to_dict(params)).numpy()
+                )
+                return result
 
         else:
             jac = True
 
             def fun(params):
                 result, grad = ep.value_and_grad(
-                    lambda param_tensor: stat(
-                        params=self._param_sequence_to_dict(param_tensor)
-                    ),
+                    lambda param_tensor: self.sign
+                    * stat(params=self._param_sequence_to_dict(param_tensor)),
                     hypney.sequence_to_tensor(params, match_type=stat.data),
                 )
                 return result.numpy(), grad.numpy()
@@ -40,7 +43,7 @@ class Minimum(hypney.Estimator):
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)
 
         if result.success:
-            return result.x
+            return self._param_sequence_to_dict(result.x)
         raise ValueError(f"Optimizer failed: {result.message}")
 
     def _param_sequence_to_dict(self, x):
