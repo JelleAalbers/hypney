@@ -1,3 +1,4 @@
+import eagerpy as ep
 import numpy as np
 from scipy import optimize
 
@@ -18,20 +19,23 @@ class Minimum(hypney.Estimator):
         guess = np.array([p.default for p in self._free_params()])
         bounds = [(p.min, p.max) for p in self._free_params()]
 
-        if hasattr(self.statistic, "compute_with_grad"):
-            jac = True
-
-            def fun(params):
-                return stat.compute_with_grad(
-                    params=self._array_to_params(params),
-                    grad_wrt=self.stat.param_names,
-                )
-
-        else:
+        if isinstance(stat.data, ep.NumPyTensor):
             jac = None
 
             def fun(params):
-                return stat(params=self._array_to_params(params))
+                return stat(params=self._param_array_to_dict(params))
+
+        else:
+            jac = True
+
+            def fun(params):
+                result, grad = ep.value_and_grad(
+                    lambda param_tensor: stat(
+                        params=self._param_sequence_to_dict(param_tensor)
+                    ),
+                    hypney.sequence_to_tensor(params, match_type=stat.data),
+                )
+                return result.numpy(), grad.numpy()
 
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)
 
@@ -39,7 +43,7 @@ class Minimum(hypney.Estimator):
             return result.x
         raise ValueError(f"Optimizer failed: {result.message}")
 
-    def _array_to_params(self, x: np.ndarray):
+    def _param_sequence_to_dict(self, x):
         params = {p.name: x[i] for i, p in enumerate(self._free_params())}
         return {**params, **self.fix}
 

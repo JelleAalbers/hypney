@@ -9,13 +9,8 @@ export, __all__ = hypney.exporter()
 
 
 @export
-def ep_to_np(x: ep.TensorType) -> np.ndarray:
-    return np.asarray(x.raw)
-
-
-@export
 def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
-    if isinstance(x, ep.Tensor):
+    if isinstance(x, type(match_type)):
         return x
     return match_type.zeros(len(x)) + x
 

@@ -26,14 +26,12 @@ class Statistic(hypney.DataContainer):
 
     def __init__(self, model: hypney.Model, data=None, dist=None):
         self.model = model
-        if not self.param_dependent:
-            self.keep_data = False
 
         if dist is None and hasattr(self, "_build_dist"):
             self.dist = hypney.models.TransformedModel(
                 self._build_dist(),
                 transform_params=self._dist_params,
-                param_specs=self.model.param_spec,
+                param_specs=self.model.param_specs,
             )
         else:
             self.dist = dist
@@ -73,7 +71,7 @@ class Statistic(hypney.DataContainer):
     def _compute(self, params):
         raise NotImplementedError
 
-    def rvs(self, size=1, params=None):
+    def rvs(self, size=1, params=None) -> np.ndarray:
         """Return statistic evaluated on simulated data,
         generated from model with params"""
         results = np.zeros(size)

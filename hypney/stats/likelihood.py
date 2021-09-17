@@ -1,4 +1,4 @@
-import numpy as np
+import eagerpy as ep
 
 import hypney
 
@@ -8,8 +8,8 @@ export, __all__ = hypney.exporter()
 @export
 class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
-        return -self.model.rate(params) + np.sum(
-            np.log(self.model.diff_rate(self.data, params))
+        return -self.model.rate(params) + ep.sum(
+            ep.log(self.model.diff_rate(self.data, params))
         )
 
 

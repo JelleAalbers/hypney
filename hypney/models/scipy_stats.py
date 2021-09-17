@@ -21,13 +21,11 @@ class ScipyUnivariate(hypney.Model):
 
     def _pdf(self, params: dict) -> ep.TensorType:
         pdf = self.dist.pdf if hasattr(self.dist, "pdf") else self.dist.pmf
-        return ep.astensor(
-            pdf(hypney.ep_to_np(self.data[:, 0]), **self._dist_params(params))
-        )
+        return ep.astensor(pdf(self.data[:, 0].numpy(), **self._dist_params(params)))
 
     def _cdf(self, params: dict) -> np.ndarray:
         return ep.astensor(
-            self.dist.cdf(hypney.ep_to_np(self.data[:, 0]), **self._dist_params(params))
+            self.dist.cdf(self.data[:, 0].numpy(), **self._dist_params(params))
         )
 
 
