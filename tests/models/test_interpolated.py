@@ -19,8 +19,10 @@ def test_interpolated():
     y = np.array([0, 0.6, 0.6, 1.0, 1.0, 0.4, 0.4, 0.0])
 
     m2 = m(data=x)
-    np.testing.assert_array_almost_equal(m2.pdf(params=dict(loc=0.2)), y)
-    np.testing.assert_array_almost_equal(m2.diff_rate(params=dict(loc=0.2)), y * 1000.0)
+    np.testing.assert_array_almost_equal(m2.pdf(params=dict(loc=0.2)).raw, y)
+    np.testing.assert_array_almost_equal(
+        m2.diff_rate(params=dict(loc=0.2)).raw, y * 1000.0
+    )
 
     # Test two dimensions of anchors
     m2 = hypney.models.Interpolation(
@@ -29,4 +31,4 @@ def test_interpolated():
 
     # TODO: same here
     y = np.array([0.0, 1.6, 1.6, 0.4, 0.4, 0.0, 0.0, 0.0])
-    np.testing.assert_array_almost_equal(m2.pdf(params=dict(scale=0.7)), y)
+    np.testing.assert_array_almost_equal(m2.pdf(params=dict(scale=0.7)).raw, y)

@@ -2,6 +2,7 @@ from functools import partial, partialmethod
 import itertools
 import typing as ty
 
+import eagerpy as ep
 import numpy as np
 
 import hypney
@@ -17,6 +18,7 @@ class Interpolation(hypney.Model):
 
     data_methods_to_interpolate = "_pdf _cdf _diff_rate".split()
     other_methods_to_interpolate = "_rate ".split()
+    anchor_models: ty.Dict[tuple, hypney.Model]
 
     def __init__(
         self,
@@ -96,6 +98,8 @@ class Interpolation(hypney.Model):
         super()._init_data()
 
     def _init_cut(self):
+        if not isinstance(self.data, ep.NumPyTensor):
+            raise NotImplementedError("Interpolation only works on numpy data")
         if self.data is not None:
             self._init_data()
         super()._init_cut()
@@ -118,10 +122,14 @@ class Interpolation(hypney.Model):
         if cut is not hypney.NotChanged:
             self = self(cut=cut)
         if not itp_name in self._interpolators:
-            # No interpolator was built e.g. diff_rate when pdf and rate known.
+            # No interpolator was built (e.g. diff_rate when pdf and rate known)
             return getattr(super(), itp_name)(params)
         params = self.validate_params(params)
-        return self._interpolators[itp_name]([self._params_to_anchor_tuple(params)])[0]
+        anchor_tuple = self._params_to_anchor_tuple(params)
+        result = self._interpolators[itp_name]([anchor_tuple])[0]
+        if isinstance(result, np.ndarray):
+            result = ep.astensor(result)
+        return result
 
     def _params_to_anchor_tuple(self, params):
         return tuple([params[p.name] for p in self.param_specs if p.anchors])
@@ -130,7 +138,7 @@ class Interpolation(hypney.Model):
         """Call Model.method_name for anchor model at params"""
         return getattr(self.anchor_models[param_tuple], method_name)()
 
-    def _rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
+    def _rvs(self, params: dict = None, size: int = 1) -> ep.TensorType:
         anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             # Dig into interpolator to get weight for each anchor,
@@ -139,7 +147,7 @@ class Interpolation(hypney.Model):
             raise NotImplementedError("Can only simulate at anchor models")
         return self.anchor_models[anchor]._rvs(size=size)
 
-    def _simulate(self, params: dict = None) -> np.ndarray:
+    def _simulate(self, params: dict = None) -> ep.TensorType:
         anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             raise NotImplementedError("Can only simulate at anchor models")

@@ -1,5 +1,6 @@
 import typing as ty
 
+import eagerpy as ep
 import numpy as np
 from scipy import stats
 
@@ -15,15 +16,19 @@ class ScipyUnivariate(hypney.Model):
     def _dist_params(self, params):
         return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
 
-    def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
+    def _rvs(self, params: dict, size: int = 1) -> ep.TensorType:
         return self.dist.rvs(size=size, **self._dist_params(params))[:, None]
 
-    def _pdf(self, params: dict) -> np.ndarray:
+    def _pdf(self, params: dict) -> ep.TensorType:
         pdf = self.dist.pdf if hasattr(self.dist, "pdf") else self.dist.pmf
-        return pdf(self.data[:, 0], **self._dist_params(params))
+        return ep.astensor(
+            pdf(hypney.ep_to_np(self.data[:, 0]), **self._dist_params(params))
+        )
 
     def _cdf(self, params: dict) -> np.ndarray:
-        return self.dist.cdf(self.data[:, 0], **self._dist_params(params))
+        return ep.astensor(
+            self.dist.cdf(hypney.ep_to_np(self.data[:, 0]), **self._dist_params(params))
+        )
 
 
 @export

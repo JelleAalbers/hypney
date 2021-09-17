@@ -1,7 +1,9 @@
 from copy import copy
 import itertools
+import math
 import typing as ty
 
+import eagerpy as ep
 import numpy as np
 
 import hypney
@@ -145,7 +147,7 @@ class Model(hypney.DataContainer):
 
         return params
 
-    def validate_data(self, data: np.ndarray) -> np.ndarray:
+    def validate_data(self, data) -> ep.TensorType:
         if data is None:
             raise ValueError("None is not valid as data")
         # Shorthand data specifications
@@ -158,6 +160,7 @@ class Model(hypney.DataContainer):
             data = np.asarray(data)
         if len(data.shape) == 1:
             data = data[:, None]
+        data = ep.astensor(data)
 
         observed_dim = data.shape[1]
         if self.n_dim != observed_dim:
@@ -171,7 +174,7 @@ class Model(hypney.DataContainer):
             return cut
         if cut is None:
             raise ValueError("None is not a valid cut, use NoCut")
-        if isinstance(cut, (list, np.ndarray)):
+        if isinstance(cut, (list, np.ndarray, ep.Tensor)):
             cut = tuple(cut)
         if not isinstance(cut, tuple):
             raise ValueError("Cut should be a tuple")
@@ -197,7 +200,7 @@ class Model(hypney.DataContainer):
         params = self.validate_params(params)
         return self(cut=cut)._simulate(params)
 
-    def _simulate(self, params):
+    def _simulate(self, params) -> np.ndarray:
         if self.simulate_partially_efficient:
             print("Untested!")
             mu = self.rate_before_efficiencies(params)
@@ -211,7 +214,7 @@ class Model(hypney.DataContainer):
             n = np.random.poisson(mu)
             data = self._rvs(params, size=n)
             assert len(data) == n
-            data = self.apply_cut(data)
+            data = self.apply_cut(data).raw
 
         return data
 
@@ -235,14 +238,14 @@ class Model(hypney.DataContainer):
     def _apply_cut(self):
         if self.cut == hypney.NoCut:
             return self.data
-        passed = np.ones(len(self.data), np.bool_)
+        passed = 1 + 0 * self.data[:, 0]
         for dim_i, (l, r) in enumerate(self.cut):
             passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
         return self.data[passed]
 
     def diff_rate(
-        self, params: dict = None, data: np.ndarray = NotChanged, *, cut=NotChanged
-    ) -> np.ndarray:
+        self, params: dict = None, data: ep.TensorType = NotChanged, *, cut=NotChanged
+    ) -> ep.TensorType:
         params = self.validate_params(params)
         return self(data=data, cut=cut)._diff_rate(params)
 
@@ -254,7 +257,9 @@ class Model(hypney.DataContainer):
             )
         return self._pdf(params=params) * self._rate(params=params)
 
-    def pdf(self, params: dict = None, data: np.ndarray = NotChanged) -> np.ndarray:
+    def pdf(
+        self, params: dict = None, data: ep.TensorType = NotChanged
+    ) -> ep.TensorType:
         params = self.validate_params(params)
         return self(data=data)._pdf(params)
 
@@ -266,7 +271,9 @@ class Model(hypney.DataContainer):
             )
         return self._diff_rate(self.data, params) / self.rate(params)
 
-    def cdf(self, params: dict = None, data: np.ndarray = NotChanged) -> np.ndarray:
+    def cdf(
+        self, params: dict = None, data: ep.TensorType = NotChanged
+    ) -> ep.TensorType:
         params = self.validate_params(params)
         return self(data=data)._cdf(params)
 
@@ -277,7 +284,7 @@ class Model(hypney.DataContainer):
     # Methods not using data
     ##
 
-    def rate(self, params: dict = None, cut=NotChanged) -> np.ndarray:
+    def rate(self, params: dict = None, cut=NotChanged) -> ep.TensorType:
         params = self.validate_params(params)
         return self._rate(params) * self(cut=cut).cut_efficiency(params=params)
 
@@ -303,7 +310,7 @@ class Model(hypney.DataContainer):
         signs, points = zip(
             *[
                 (
-                    np.prod(indices),
+                    math.prod(indices),
                     [c[int(0.5 * j + 0.5)] for (c, j) in zip(self.cut, indices)],
                 )
                 for indices in itertools.product(
@@ -311,4 +318,4 @@ class Model(hypney.DataContainer):
                 )
             ]
         )
-        return np.sum(np.array(signs) * self.cdf(params=params, data=points))
+        return ((signs) * self.cdf(params=params, data=points)).sum()

@@ -15,5 +15,5 @@ class DiracDelta(hypney.Model):
     def _pdf(self, params):
         return np.where(self.data[:, 0] == params["loc"], float("inf"), 0)
 
-    def _rvs(self, params, size):
+    def _rvs(self, params, size) -> np.ndarray:
         return np.ones((size, 1)) * params["loc"]

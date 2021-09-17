@@ -2,6 +2,7 @@
 
 adapted from https://github.com/JelleAalbers/blueice/blob/master/blueice/pdf_morphers.py
 """
+import eagerpy as ep
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
@@ -46,6 +47,8 @@ class GridInterpolator:
         for anchor_grid_index, _zs in self._anchor_grid_iterator():
             # Compute f at this point
             result = f(inputs_at_anchors[tuple(_zs)])
+            if isinstance(result, ep.Tensor):
+                result = result.raw
 
             if anchor_scores is None:
                 # Now that we have the first result, we can allocate

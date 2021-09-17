@@ -35,7 +35,9 @@ def test_uniform():
     assert m.pdf(data=0) == 1.0
 
     # Test cdf
-    assert np.all(m.cdf(data=[0.0, 0.5, 1.0]) == np.array([0.0, 0.5, 1.0]))
+    np.testing.assert_array_equal(
+        m.cdf(data=[0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0])
+    )
 
     # Test diff rate
     assert m.diff_rate(data=0.0) == 0.0

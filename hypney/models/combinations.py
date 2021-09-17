@@ -1,6 +1,8 @@
+import itertools
 import collections
 import typing as ty
 
+import eagerpy as ep
 import numpy as np
 
 import hypney
@@ -17,7 +19,7 @@ class AssociativeCombination(hypney.Model):
     # param_mapping   (mname -> (pname in model, pname in combination))
     param_mapping: ty.Dict[str, ty.Tuple[str, str]]
 
-    def __init__(self, *models):
+    def __init__(self, *models: hypney.Model):
         assert len(models) > 1
 
         # Exploit associativity: if any of the models are combinations of
@@ -42,6 +44,9 @@ class AssociativeCombination(hypney.Model):
         super().__init__(
             name=self.__class__.__name__ + "_" + "_".join(self.model_names)
         )
+
+    def _init_observables(self):
+        raise NotImplementedError
 
     def _iter_models_params(self, params):
         for m, param_map in zip(self.models, self.param_mapping.values()):
@@ -80,35 +85,42 @@ class Mixture(AssociativeCombination):
         self.models = tuple([m(data=self.data) for m in self.models])
         super()._init_data()
 
-    def _rvs(self, params: dict, size: int = 1) -> np.ndarray:
+    def _rvs(self, params: dict, size: int = 1) -> ep.types.NativeTensor:
         n_from = np.random.multinomial(size, self._f_per_model(params))
-        return np.concatenate(
+        return ep.concatenate(
             [
-                m._rvs(params=ps, size=_n)
+                ep.astensor(m._rvs(params=ps, size=_n))
                 for _n, (m, ps) in zip(n_from, self._iter_models_params(params))
             ]
-        )
+        ).raw
 
-    def _rate(self, params: dict) -> np.ndarray:
+    def _rate(self, params: dict) -> ep.TensorType:
         return sum(self._rate_per_model(params))
 
-    def _pdf(self, params: dict) -> np.ndarray:
-        return np.average(
-            [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
-            axis=0,
+    def _pdf(self, params: dict) -> ep.TensorType:
+        return hypney.ep_average_axis0(
+            ep.stack(
+                [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
+                axis=0,
+            ),
+            self._f_per_model(params),
+        )
+
+    def _cdf(self, params: dict) -> ep.TensorType:
+        return hypney.ep_average_axis0(
+            ep.stack(
+                [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
+                axis=0,
+            ),
             weights=self._f_per_model(params),
         )
 
-    def _cdf(self, params: dict) -> np.ndarray:
-        return np.average(
-            [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
-            axis=0,
-            weights=self._f_per_model(params),
-        )
-
-    def _diff_rate(self, params: dict) -> np.ndarray:
-        return np.sum(
-            [m._diff_rate(params=ps) for m, ps in self._iter_models_params(params)],
+    def _diff_rate(self, params: dict) -> ep.TensorType:
+        return ep.sum(
+            ep.stack(
+                [m._diff_rate(params=ps) for m, ps in self._iter_models_params(params)],
+                axis=0,
+            ),
             axis=0,
         )
 
@@ -116,12 +128,13 @@ class Mixture(AssociativeCombination):
     # Helpers
     ##
 
-    def _rate_per_model(self, params: dict) -> np.ndarray:
-        return np.array([m._rate(ps) for m, ps in self._iter_models_params(params)])
+    def _rate_per_model(self, params: dict) -> ep.TensorType:
+        return [m._rate(ps) for m, ps in self._iter_models_params(params)]
 
     def _f_per_model(self, params):
         mus = self._rate_per_model(params)
-        return mus / mus.sum()
+        sum_mu = sum(mus)
+        return [mu / sum_mu for mu in mus]
 
 
 @export
@@ -140,23 +153,27 @@ class TensorProduct(AssociativeCombination):
 
     def _obs_splits(self):
         # TODO: check off by one
-        return np.cumsum([len(m.observables) for m in self.models])
+        # cumsum would have been easier, but we don't know the tensor type here
+        return list(itertools.accumulate([len(m.observables) for m in self.models]))
 
     def _init_data(self):
-        _data_list = np.split(self.data, self._obs_splits(), axis=-1)
+        _data_list = hypney.ep_split(self.data, self._obs_splits(), axis=-1)
         self.models = tuple([m(data=d) for m, d in zip(self.models, _data_list)])
         super()._init_data()
 
     def _init_cut(self):
-        _cut_list = np.split(self.cut, self._obs_splits())
+        _cut_list = hypney.ep_split(self.cut, self._obs_splits())
         self.models = tuple([m(cut=c) for m, c in zip(self.models, _cut_list)])
         super()._init_cut()
 
-    def _rvs(self, params: dict, size: int) -> np.ndarray:
-        return np.concatenate(
-            [m.rvs(params=ps, size=size) for m, ps in self._iter_models_params(params)],
+    def _rvs(self, params: dict, size: int) -> ep.TensorType:
+        return ep.concatenate(
+            [
+                ep.astensor(m._rvs(params=ps, size=size))
+                for m, ps in self._iter_models_params(params)
+            ],
             axis=-1,
-        )
+        ).raw
 
     def _rate(self, params: dict):
         # First model controls the rate
@@ -165,18 +182,26 @@ class TensorProduct(AssociativeCombination):
         return m._rate(ps)
 
     def _pdf(self, params: dict):
-        return np.product(
-            [m._pdf(ps) for m, ps in self._iter_models_params(params)], axis=0
+        return ep.prod(
+            ep.stack(
+                [m._pdf(ps) for m, ps in self._iter_models_params(params)], axis=0
+            ),
+            axis=0,
         )
 
     def _cdf(self, params: dict):
-        return np.product(
-            [m._cdf(ps) for m, ps in self._iter_models_params(params)], axis=0
+        return ep.prod(
+            ep.stack(
+                [m._cdf(ps) for m, ps in self._iter_models_params(params)], axis=0
+            ),
+            axis=0,
         )
 
 
 @export
-def combine_param_specs(elements, names=None, share_all=False):
+def combine_param_specs(
+    elements: ty.Sequence[hypney.Model], names=None, share_all=False
+):
     """Return param spec, mapping for new model made of other models
     Mapping is name -> (old name, new name)
 
@@ -190,7 +215,7 @@ def combine_param_specs(elements, names=None, share_all=False):
     name_count = collections.Counter(all_names)
     unique = [pn for pn, count in name_count.items() if count == 1]
     specs = []
-    pmap = dict()
+    pmap: ty.Dict[str, list] = dict()
     seen = []
     for m, name in zip(elements, names):
         pmap[name] = []
