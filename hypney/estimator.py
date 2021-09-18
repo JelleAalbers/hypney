@@ -7,13 +7,13 @@ export, __all__ = hypney.exporter()
 class Estimator:
     stat: hypney.Statistic
 
-    def __init__(self, stat, fix: dict = None, free: tuple = None):
+    def __init__(self, stat, fix=None, keep=None):
         self.stat = stat
 
-        if free is not None:
+        if keep is not None:
             if fix is not None:
-                raise ValueError("Specify either free or fix, not both")
-            fix = [pname for pname in self.stat.model.param_names if pname not in free]
+                raise ValueError("Specify either keep or fix, not both")
+            fix = [pname for pname in self.stat.model.param_names if pname not in keep]
 
         if fix is None:
             fix = dict()

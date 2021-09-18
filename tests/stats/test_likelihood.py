@@ -42,5 +42,7 @@ def test_lr():
         ),
     )
 
-    # Likelihood with only the rate free
-    # lr = hypney.stats.LikelihoodRatio(m, data=data, free='rate')
+    # # Likelihood with only the rate free
+    lr = hypney.stats.LikelihoodRatio(m.filter_params(keep="rate"), data=data)
+    assert np.isclose(lr.bestfit["rate"], 1)
+    assert len(lr.bestfit) == 1

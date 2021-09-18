@@ -1,4 +1,5 @@
 from copy import copy
+import functools
 import itertools
 import math
 import typing as ty
@@ -71,13 +72,24 @@ class Model(hypney.DataContainer):
 
     # TODO: freeze is a poor name, can change things twice...
     # copy is worse since we may not copy
-    def freeze(self, name=NotChanged, data=NotChanged, cut=NotChanged, **new_defaults):
-        """Return a model with possibly changed name, defaults, or data"""
+    def freeze(
+        self,
+        name=NotChanged,
+        data=NotChanged,
+        cut=NotChanged,
+        fix=None,
+        keep=None,
+        **new_defaults,
+    ):
+        """Return a model with possibly changed name, defaults, data, or parameters
+        """
         if (
             name is NotChanged
             and data is NotChanged
             and cut is NotChanged
             and not new_defaults
+            and fix is None
+            and keep is None
         ):
             return self
         new_self = copy(self)
@@ -88,16 +100,8 @@ class Model(hypney.DataContainer):
             new_self._set_data(data)
         if cut is not NotChanged:
             new_self._set_cut(cut)
+        new_self = new_self.filter_params(fix=fix, keep=keep)
         return new_self
-
-    def __call__(self, *args, **kwargs):
-        return self.freeze(*args, **kwargs)
-
-    def __add__(self, other):
-        return hypney.models.Mixture(self, other)
-
-    def __pow__(self, other):
-        return hypney.models.TensorProduct(self, other)
 
     def _has_redefined(self, method_name, from_base=None):
         """Returns if method_name is redefined from Model.method_name"""
@@ -115,6 +119,55 @@ class Model(hypney.DataContainer):
     def _init_cut(self):
         """Called during initialization, if cut is to be frozen"""
         pass
+
+    ##
+    # Creating new models from old
+    ##
+
+    def __call__(self, *args, **kwargs):
+        return self.freeze(*args, **kwargs)
+
+    def __add__(self, other):
+        return hypney.models.Mixture(self, other)
+
+    def __pow__(self, other):
+        return hypney.models.TensorProduct(self, other)
+
+    def filter_params(self, fix=None, keep=None):
+        """Return new model with parameters in fix fixed
+
+        Args:
+         - fix: sequence of parameter names to fix, or dict of parameters
+            to fix to specific values
+         - free: sequence of parameter names to keep free, others will be
+            fixed to their defaults.
+
+        Either fix or free may be specified, but not both.
+        """
+        if fix is None and keep is None:
+            return self
+
+        if keep is not None:
+            if fix is not None:
+                raise ValueError("Specify either free or fix, not both")
+            if isinstance(keep, str):
+                keep = (keep,)
+            fix = [pname for pname in self.param_names if pname not in keep]
+
+        if fix is None:
+            fix = dict()
+        if isinstance(fix, (tuple, list)):
+            if isinstance(fix, str):
+                fix = (fix,)
+            fix = {pname: self.defaults[pname] for pname in fix}
+
+        fix = self.validate_params(fix, set_defaults=False)
+        return hypney.models.TransformedModel(
+            orig_model=self,
+            data=self.data,
+            param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
+            transform_params=functools.partial(_merge_dicts, fix),
+        )
 
     ##
     # Input validation
@@ -319,3 +372,8 @@ class Model(hypney.DataContainer):
             ]
         )
         return ((signs) * self.cdf(params=params, data=points)).sum()
+
+
+def _merge_dicts(x, y):
+    # Lambda function / closure wouldn't pickle..
+    return {**x, **y}

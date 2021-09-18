@@ -1,5 +1,3 @@
-from copy import copy
-
 import hypney
 
 export, __all__ = hypney.exporter()
@@ -105,7 +103,7 @@ class TransformedModel(hypney.Model):
         return super()._apply_cut()
 
     def _check_transform_data_jac_det(self):
-        if not self._has_redefined(
+        if self._has_redefined(
             "_transform_data", from_base=TransformedModel
         ) and not self._has_redefined(
             "_transform_data_jac_det", from_base=TransformedModel
