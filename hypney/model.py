@@ -346,9 +346,7 @@ class Model(hypney.DataContainer):
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
     def cut_efficiency(
-        self,
-        params: dict = None,
-        cut=NotChanged,
+        self, params: dict = None, cut=NotChanged,
     ):
         params = self.validate_params(params)
         return self(cut=cut)._cut_efficiency(params)

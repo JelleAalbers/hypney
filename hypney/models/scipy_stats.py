@@ -45,9 +45,7 @@ class From1DHistogram(ScipyUnivariate):
             else:
                 raise ValueError("Pass histogram and bin edges arrays")
 
-        self.dist = stats.rv_histogram(
-            (histogram, bin_edges),
-        )
+        self.dist = stats.rv_histogram((histogram, bin_edges),)
         super().__init__(*args, **kwargs)
 
 
