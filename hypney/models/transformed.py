@@ -71,7 +71,7 @@ class TransformedModel(hypney.Model):
     ##
 
     def _check_reverse_transform(self):
-        if not self._has_redefined(
+        if self._has_redefined(
             "_transform_data", from_base=TransformedModel
         ) and not self._has_redefined(
             "_reverse_transform_data", from_base=TransformedModel

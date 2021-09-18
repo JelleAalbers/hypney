@@ -14,7 +14,20 @@ class Estimator:
     def __call__(self, data=hypney.NotChanged):
         if data is not hypney.NotChanged:
             stat = self.stat.freeze(data=data)
+        else:
+            if self.stat.data is None:
+                raise ValueError("Provide data")
+            stat = self.stat
         return self._compute(stat)
 
     def _compute(self, stat):
         raise NotImplementedError
+
+    # Generic routines, may be useful
+
+    def _free_params(self):
+        return [p for p in self.stat.model.param_specs if p.name not in self.fix]
+
+    def _param_sequence_to_dict(self, x):
+        params = {p.name: x[i] for i, p in enumerate(self._free_params())}
+        return {**params, **self.fix}

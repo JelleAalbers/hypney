@@ -47,8 +47,9 @@ class PLR(LikelihoodRatio):
         return {pname: val for pname, val in params.items() if pname in self.poi}
 
     def _compute(self, params):
-        conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
-        conditional_fit = self.max_estimator(conditional_ll)
+        conditional_fit = self.max_estimator(self.ll, fix=self._filter_poi(params))()
+        # Probably slower alternative:
+        # conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
         return -2 * (self.ll(conditional_fit) - self.ll_bestfit)
 
     def _build_dist(self):

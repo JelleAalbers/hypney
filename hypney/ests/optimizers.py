@@ -11,9 +11,6 @@ export, __all__ = hypney.exporter()
 class Minimum(hypney.Estimator):
     sign = 1
 
-    def _free_params(self):
-        return [p for p in self.stat.model.param_specs if p.name not in self.fix]
-
     def _compute(self, stat):
         guess = np.array([p.default for p in self._free_params()])
         bounds = [(p.min, p.max) for p in self._free_params()]
@@ -44,10 +41,6 @@ class Minimum(hypney.Estimator):
         if result.success:
             return self._param_sequence_to_dict(result.x)
         raise ValueError(f"Optimizer failed: {result.message}")
-
-    def _param_sequence_to_dict(self, x):
-        params = {p.name: x[i] for i, p in enumerate(self._free_params())}
-        return {**params, **self.fix}
 
 
 @export
