@@ -11,8 +11,8 @@ export, __all__ = hypney.exporter()
 
 @export
 class Statistic:
-    model: hypney.Model         # Model of the data
-    dist: hypney.Model          # Model of the statistic; takes same parameters
+    model: hypney.Model  # Model of the data
+    dist: hypney.Model  # Model of the statistic; takes same parameters
 
     def __init__(self, model: hypney.Model, data=hypney.NotChanged, dist=None):
         self.model = model
@@ -76,7 +76,7 @@ class Statistic:
         results = np.zeros(size)
         for i in range(size):
             sim_data = self.model.simulate(params=params)
-            results[i] = self(data=sim_data, params=params)
+            results[i] = self(data=sim_data, params=params).numpy().item()
         return results
 
 

@@ -30,7 +30,7 @@ def test_lr():
     assert np.isclose(lr.bestfit["scale"], min_scale)
     assert np.isclose(lr.bestfit["loc"], 0)
 
-    double_rate = lr(params={**lr.bestfit, **dict(rate=2)})
+    double_rate = lr(params={**lr.bestfit, **dict(rate=2)}).numpy()
     assert np.isclose(
         double_rate,
         -2

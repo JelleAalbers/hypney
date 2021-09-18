@@ -10,7 +10,7 @@ class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
         return -self.model.rate(params) + ep.sum(
             ep.log(self.model.diff_rate(params=params))
-        ).item()
+        )
 
 
 @export
@@ -49,10 +49,12 @@ class PLR(LikelihoodRatio):
         return {pname: val for pname, val in params.items() if pname in self.poi}
 
     def _compute(self, params):
-        self.conditional_fit, self.ll_conditional_fit = self.max_est(self.ll, fix=self._filter_poi(params))()
+        self.conditional_fit, self.ll_conditional_fit = self.max_est(
+            self.ll, fix=self._filter_poi(params)
+        )()
         # Probably slower alternative:
         # conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
-        return (self.ll_conditional_fit - self.ll_bestfit)
+        return self.ll_conditional_fit - self.ll_bestfit
 
     def _build_dist(self):
         return hypney.models.Chi2(df=len(self.poi))

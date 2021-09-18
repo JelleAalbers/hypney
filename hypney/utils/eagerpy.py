@@ -12,7 +12,36 @@ export, __all__ = hypney.exporter()
 def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
     if isinstance(x, type(match_type)):
         return x
-    return match_type.zeros(len(x)) + x
+    if not isinstance(match_type, ep.Tensor):
+        match_type = ep.astensor(match_type)
+
+    # Check, why is this not included in eagerpy?
+    # Maybe it is and I haven't found it?
+    # e.g. ep.JAXTensor([1,2,3]) gives something pathological
+    # (list wrapped in a JAXTensor, should be wrapped jax array)
+    if isinstance(match_type, ep.NumPyTensor):
+        return ep.astensor(np.asarray(x))
+    # ep.jax etc. will automatically wrap return values as eagerpy tensors
+    if isinstance(match_type, ep.JAXTensor):
+        return ep.jax.numpy.asarray(x)
+    if isinstance(match_type, ep.PyTorchTensor):
+        return ep.torch.tensor(x)
+    if isinstance(match_type, ep.TensorFlowTensor):
+        return ep.tensorflow.convert_to_tensor(x)
+    raise ValueError(f"match_type of unknown type {type(match_type)}")
+
+
+@export
+def ensure_raw(x):
+    try:
+        return x.raw
+    except AttributeError:
+        return x
+
+
+@export
+def np64(x):
+    return x.numpy().astype(np.float64)
 
 
 @export
@@ -31,6 +60,7 @@ def split(x, *args, **kwargs):
 
 @export
 def tensorlib(x: ep.TensorType):
+    # This looks like
     if isinstance(x, ep.NumPyTensor):
         return np
     elif isinstance(x, ep.PyTorchTensor):

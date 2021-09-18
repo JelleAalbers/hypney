@@ -203,14 +203,15 @@ class Model:
                 params.setdefault(p.name, p.default)
 
         # Bounds check
-        for p in self.param_specs:
-            if p.name not in params:
-                continue
-            val = params[p.name]
-            if not p.min <= params[p.name] < p.max:
-                raise ValueError(
-                    f"{val} is out of bounds {(p.min, p.max)} for {p.name}"
-                )
+        # -- disabled since autograd libraries hate these ifs
+        # for p in self.param_specs:
+        #     if p.name not in params:
+        #         continue
+        #     val = params[p.name]
+        #     if not p.min <= params[p.name] < p.max:
+        #         raise ValueError(
+        #             f"{val} is out of bounds {(p.min, p.max)} for {p.name}"
+        #         )
 
         # Flag spurious parameters
         spurious = set(params.keys()) - set(self.param_names)
