@@ -9,27 +9,29 @@ export, __all__ = hypney.exporter()
 class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
         return -self.model.rate(params) + ep.sum(
-            ep.log(self.model.diff_rate(params=params, data=self.data))
-        )
+            ep.log(self.model.diff_rate(params=params))
+        ).item()
 
 
 @export
 class LikelihoodRatio(hypney.Statistic):
-    def __init__(self, model, *args, max_estimator=None, **kwargs):
-        if max_estimator is None:
-            max_estimator = hypney.ests.Maximum
-        self.max_estimator = max_estimator
-        self.ll = LogLikelihood(model)
-        self.mle = self.max_estimator(self.ll)
+    def __init__(self, model, *args, max_est=None, **kwargs):
+        if max_est is None:
+            max_est = hypney.ests.MaximumAndValue
+        self.max_est = max_est
 
         super().__init__(model=model, *args, **kwargs)
 
     def _init_data(self):
-        self.bestfit = self.mle(self.data)
-        self.ll_bestfit = self.ll(params=self.bestfit, data=self.data)
+        super()._init_data()
+        self.ll = LogLikelihood(self.model)
+        self.bestfit, self.ll_bestfit = self.max_est(self.ll)()
 
     def _compute(self, params):
-        return -2 * (self.ll(params=params, data=self.data) - self.ll_bestfit)
+        return -2 * (self.ll(params=params) - self.ll_bestfit)
+
+    def _build_dist(self):
+        return hypney.models.Chi2(df=len(self.model.param_names))
 
 
 @export
@@ -47,10 +49,10 @@ class PLR(LikelihoodRatio):
         return {pname: val for pname, val in params.items() if pname in self.poi}
 
     def _compute(self, params):
-        conditional_fit = self.max_estimator(self.ll, fix=self._filter_poi(params))()
+        self.conditional_fit, self.ll_conditional_fit = self.max_est(self.ll, fix=self._filter_poi(params))()
         # Probably slower alternative:
         # conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
-        return -2 * (self.ll(conditional_fit) - self.ll_bestfit)
+        return (self.ll_conditional_fit - self.ll_bestfit)
 
     def _build_dist(self):
         return hypney.models.Chi2(df=len(self.poi))

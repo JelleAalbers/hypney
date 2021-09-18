@@ -14,11 +14,12 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class Model(hypney.DataContainer):
+class Model:
     name: str = ""
     param_specs: ty.Tuple[hypney.ParameterSpec] = (hypney.DEFAULT_RATE_PARAM,)
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     cut: ty.Union[hypney.NoCut, tuple] = hypney.NoCut
+    data: np.ndarray = None
 
     def param_spec_for(self, pname):
         for p in self.param_specs:
@@ -62,7 +63,24 @@ class Model(hypney.DataContainer):
             self._set_cut(cut)
 
         self._validate_and_set_defaults(new_defaults)
-        super().__init__(data=data)
+        self._set_data(data)
+
+    def _set_data(self, data=hypney.NotChanged):
+        if data is hypney.NotChanged:
+            return
+        if data is None:
+            if self.data is not None:
+                raise ValueError("Cannot reset data to None")
+            else:
+                self.data = None
+                return
+        data = self.validate_data(data)
+        self.data = data
+        self._init_data()
+
+    def _init_data(self):
+        """Initialize self.data (either from construction or data change)"""
+        pass
 
     def _validate_and_set_defaults(self, new_defaults: dict):
         new_defaults = self.validate_params(new_defaults)

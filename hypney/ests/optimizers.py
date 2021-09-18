@@ -8,7 +8,7 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class Minimum(hypney.Estimator):
+class MinimumAndValue(hypney.Estimator):
     sign = 1
 
     def _compute(self, stat):
@@ -21,7 +21,7 @@ class Minimum(hypney.Estimator):
             def fun(params):
                 result = (
                     self.sign
-                    * stat(params=self._param_sequence_to_dict(params)).numpy()
+                    * stat(params=self._param_sequence_to_dict(params))
                 )
                 return result
 
@@ -34,15 +34,27 @@ class Minimum(hypney.Estimator):
                     * stat(params=self._param_sequence_to_dict(param_tensor)),
                     hypney.sequence_to_tensor(params, match_type=stat.data),
                 )
-                return result.numpy(), grad.numpy()
+                return result, grad.numpy()
 
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)
 
         if result.success:
-            return self._param_sequence_to_dict(result.x)
+            return self._param_sequence_to_dict(result.x), result.fun * self.sign
         raise ValueError(f"Optimizer failed: {result.message}")
 
 
 @export
-class Maximum(Minimum):
+class Minimum(MinimumAndValue):
+
+    def _compute(self, stat):
+        return super()._compute(stat)[0]
+
+
+@export
+class MaximumAndValue(MinimumAndValue):
+    sign = -1
+
+
+@export
+class Maximum(MinimumAndValue):
     sign = -1

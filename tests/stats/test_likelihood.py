@@ -12,7 +12,7 @@ def test_likelihood():
     lf = hypney.stats.LogLikelihood(m, data=data)
     assert len(lf.data) == 1
 
-    assert lf().numpy() == -1 + stats.norm.logpdf(0)
+    assert lf() == -1 + stats.norm.logpdf(0)
     assert lf(params=dict(rate=2)) == -2 + np.log(2 * stats.norm.pdf(0))
 
 
@@ -30,7 +30,7 @@ def test_lr():
     assert np.isclose(lr.bestfit["scale"], min_scale)
     assert np.isclose(lr.bestfit["loc"], 0)
 
-    double_rate = lr(params={**lr.bestfit, **dict(rate=2)}).numpy()
+    double_rate = lr(params={**lr.bestfit, **dict(rate=2)})
     assert np.isclose(
         double_rate,
         -2

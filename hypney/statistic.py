@@ -1,5 +1,6 @@
 from copy import copy
 
+import eagerpy as ep
 import numpy as np
 
 import hypney
@@ -8,23 +9,12 @@ from hypney import NotChanged
 export, __all__ = hypney.exporter()
 
 
-class Statistic(hypney.DataContainer):
-    pass
-
-
 @export
-class Statistic(hypney.DataContainer):
-    # Is data necessary to compute the statistic on different parameters?
-    # e.g. if _init_data computes sufficient summary statistics, it won't be
-    keep_data = True
+class Statistic:
+    model: hypney.Model         # Model of the data
+    dist: hypney.Model          # Model of the statistic; takes same parameters
 
-    # Model of the data.
-    model: hypney.Model
-
-    # Model of the statistic's results; takes the same parameters
-    dist: hypney.Model
-
-    def __init__(self, model: hypney.Model, data=None, dist=None):
+    def __init__(self, model: hypney.Model, data=hypney.NotChanged, dist=None):
         self.model = model
 
         if dist is None and hasattr(self, "_build_dist"):
@@ -36,23 +26,32 @@ class Statistic(hypney.DataContainer):
         else:
             self.dist = dist
 
-        super().__init__(data=data)
+        self._set_data(data)
+
+    def _set_data(self, data):
+        if data is not hypney.NotChanged:
+            self.model = self.model(data=data)
+        # self.data is just self.model.data, see below
+        if self.data is not None:
+            self._init_data()
+
+    @property
+    def data(self) -> ep.types.NativeTensor:
+        return self.model.data
 
     def _dist_params(self, params):
         """Return distribution params given model params"""
+        _ = params  # Prevent static analyzer warning
         return dict()
 
     def validate_data(self, data):
         return self.model.validate_data(data)
 
     def _init_data(self):
-        if not self.keep_data:
-            # Statistic relies only on stuff computed in init_data,
-            # so we can throw away our reference to the data
-            self.data = None
-        super()._init_data()
+        """Initialize self.data (either from construction or data change)"""
+        pass
 
-    def freeze(self, data=NotChanged) -> Statistic:
+    def freeze(self, data=NotChanged):
         """Return a statistic with possibly changed data"""
         if data is NotChanged:
             return self
@@ -75,7 +74,7 @@ class Statistic(hypney.DataContainer):
         """Return statistic evaluated on simulated data,
         generated from model with params"""
         results = np.zeros(size)
-        for i in range(len(size)):
+        for i in range(size):
             sim_data = self.model.simulate(params=params)
             results[i] = self(data=sim_data, params=params)
         return results
@@ -89,8 +88,6 @@ class IndependentStatistic(Statistic):
 
     For speed, the result will be precomputed as soon as data is known.
     """
-
-    keep_data = False
 
     def _init_data(self):
         # Precompute result on the data.

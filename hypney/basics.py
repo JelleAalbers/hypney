@@ -69,24 +69,3 @@ class NoCut:
     """Instruction to not cut data"""
 
     pass
-
-
-@export
-class DataContainer:
-    data: np.ndarray = None
-
-    def __init__(self, data=None):
-        self._set_data(data)
-
-    def _set_data(self, data=None):
-        if data is None:
-            return
-        data = self.validate_data(data)
-        self.data = data
-        self._init_data()
-
-    def validate_data(self, data):
-        return data
-
-    def _init_data(self):
-        pass
