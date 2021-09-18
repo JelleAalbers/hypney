@@ -7,7 +7,11 @@ import hypney
 def test_likelihood():
     # Single event at x=0
     m = hypney.models.Norm(rate=1)
-    data = np.array([0,])
+    data = np.array(
+        [
+            0,
+        ]
+    )
 
     lf = hypney.stats.LogLikelihood(m, data=data)
     assert len(lf.data) == 1
@@ -19,7 +23,11 @@ def test_likelihood():
 def test_lr():
     # Single event at x=0
     m = hypney.models.Norm(rate=1)
-    data = np.array([0,])
+    data = np.array(
+        [
+            0,
+        ]
+    )
 
     # Likelihood with all parameters free
     lr = hypney.stats.LikelihoodRatio(m, data=data)

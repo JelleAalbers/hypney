@@ -1,3 +1,3 @@
-from .eagerpy_extensions import *
-from .hashing import *
-from .grid_interpolator import *
+from . import eagerpy
+from . import hashing
+from .grid_interpolator import GridInterpolator

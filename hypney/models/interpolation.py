@@ -13,7 +13,7 @@ export, __all__ = hypney.exporter()
 @export
 class Interpolation(hypney.Model):
     """Model which interpolates between other models, depending on parameters.
-        The pdf, cdf, rate, etc. are interpolators, evaluated at anchor points
+    The pdf, cdf, rate, etc. are interpolators, evaluated at anchor points
     """
 
     data_methods_to_interpolate = "_pdf _cdf _diff_rate".split()
@@ -54,7 +54,9 @@ class Interpolation(hypney.Model):
         }
         self._some_model = next(iter(self.anchor_models.values()))
 
-        self.interp_maker = hypney.GridInterpolator(anchor_values)
+        self.interp_maker = hypney.utils.grid_interpolator.GridInterpolator(
+            anchor_values
+        )
         self._interpolators = dict()
 
         # Add specs of any non-interpolated params

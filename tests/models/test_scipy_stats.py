@@ -105,5 +105,8 @@ def test_from_histogram():
     m = hypney.models.From1DHistogram(hist, edges)
     data = m.simulate()
     np.testing.assert_equal(
-        m.pdf(data=data), stats.rv_histogram((hist, edges),).pdf(data[:, 0]),
+        m.pdf(data=data),
+        stats.rv_histogram(
+            (hist, edges),
+        ).pdf(data[:, 0]),
     )

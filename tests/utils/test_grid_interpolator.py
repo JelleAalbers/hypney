@@ -6,9 +6,9 @@ import hypney
 
 def test_grid_interpolator():
     with pytest.raises(ValueError):
-        hypney.GridInterpolator(anchors_per_parameter=dict())
+        hypney.utils.grid_interpolator.GridInterpolator(anchors_per_parameter=dict())
 
-    itp = hypney.GridInterpolator([(-1, 0, 1)])
+    itp = hypney.utils.grid_interpolator.GridInterpolator([(-1, 0, 1)])
     anchor_points = itp.get_anchor_points()
     assert isinstance(anchor_points, list)
     assert isinstance(anchor_points[0], tuple)

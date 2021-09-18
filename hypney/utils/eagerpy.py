@@ -16,7 +16,7 @@ def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
 
 
 @export
-def ep_average_axis0(x, weights=None):
+def average_axis0(x, weights=None):
     x = ep.astensor(x)
     stacked = ep.stack(x, axis=0)
     weights = sequence_to_tensor(weights, match_type=x)
@@ -25,7 +25,7 @@ def ep_average_axis0(x, weights=None):
 
 
 @export
-def ep_split(x, *args, **kwargs):
+def split(x, *args, **kwargs):
     return [ep.astensor(x) for x in tensorlib(x).split(x.raw, *args, **kwargs)]
 
 

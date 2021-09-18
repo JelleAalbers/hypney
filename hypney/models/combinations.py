@@ -59,7 +59,7 @@ class AssociativeCombination(hypney.Model):
 @export
 class Mixture(AssociativeCombination):
     """Model that is a mixture of other models;
-        that is, events from all constituent models are observed simultaneously.
+    that is, events from all constituent models are observed simultaneously.
     """
 
     def _init_observables(self):
@@ -98,7 +98,7 @@ class Mixture(AssociativeCombination):
         return sum(self._rate_per_model(params))
 
     def _pdf(self, params: dict) -> ep.TensorType:
-        return hypney.ep_average_axis0(
+        return hypney.utils.eagerpy.average_axis0(
             ep.stack(
                 [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
                 axis=0,
@@ -107,7 +107,7 @@ class Mixture(AssociativeCombination):
         )
 
     def _cdf(self, params: dict) -> ep.TensorType:
-        return hypney.ep_average_axis0(
+        return hypney.utils.eagerpy.average_axis0(
             ep.stack(
                 [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
                 axis=0,
@@ -140,9 +140,9 @@ class Mixture(AssociativeCombination):
 @export
 class TensorProduct(AssociativeCombination):
     """Model for which constituent models describe independent observables
-        observed simultaneously for each event.
-        (e.g. one model for energy, another for time)
-        The first model will control the overall event rate.
+    observed simultaneously for each event.
+    (e.g. one model for energy, another for time)
+    The first model will control the overall event rate.
     """
 
     def _init_observables(self):
@@ -157,12 +157,12 @@ class TensorProduct(AssociativeCombination):
         return list(itertools.accumulate([len(m.observables) for m in self.models]))
 
     def _init_data(self):
-        _data_list = hypney.ep_split(self.data, self._obs_splits(), axis=-1)
+        _data_list = hypney.utils.eagerpy.split(self.data, self._obs_splits(), axis=-1)
         self.models = tuple([m(data=d) for m, d in zip(self.models, _data_list)])
         super()._init_data()
 
     def _init_cut(self):
-        _cut_list = hypney.ep_split(self.cut, self._obs_splits())
+        _cut_list = hypney.utils.eagerpy.split(self.cut, self._obs_splits())
         self.models = tuple([m(cut=c) for m, c in zip(self.models, _cut_list)])
         super()._init_cut()
 
