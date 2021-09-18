@@ -86,7 +86,7 @@ def test_beta():
     m2 = m(rate=20, loc=-100, scale=10)
     assert m2.defaults["a"] == 0.5
     assert m2.rate() == 20.0
-    assert m2.dist == m.dist
+    assert m2.scipy_dist == m.scipy_dist
     data = m2.simulate()
     assert len(data)
     assert data.min() < 0

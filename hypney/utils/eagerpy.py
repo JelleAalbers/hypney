@@ -23,11 +23,11 @@ def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
         return ep.astensor(np.asarray(x))
     # ep.jax etc. will automatically wrap return values as eagerpy tensors
     if isinstance(match_type, ep.JAXTensor):
-        return ep.jax.numpy.asarray(x)
+        return ep.jax.numpy.asarray(x, dtype=match_type.dtype)
     if isinstance(match_type, ep.PyTorchTensor):
-        return ep.torch.tensor(x)
+        return ep.torch.tensor(x, dtype=match_type.dtype)
     if isinstance(match_type, ep.TensorFlowTensor):
-        return ep.tensorflow.convert_to_tensor(x)
+        return ep.tensorflow.convert_to_tensor(x, dtype=match_type.dtype)
     raise ValueError(f"match_type of unknown type {type(match_type)}")
 
 

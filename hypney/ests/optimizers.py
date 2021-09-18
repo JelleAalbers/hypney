@@ -54,7 +54,6 @@ class MinimumAndValue(hypney.Estimator):
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)
 
         if result.success:
-            print(result)
             return self._param_sequence_to_dict(result.x), result.fun * self.sign
         raise ValueError(f"Optimizer failed: {result.message}")
 
