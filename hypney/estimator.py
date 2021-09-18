@@ -9,18 +9,12 @@ class Estimator:
 
     def __init__(self, stat, fix=None, keep=None):
         self.stat = stat
+        self.fix = self.stat.model._process_fix_keep(fix, keep)
 
-        if keep is not None:
-            if fix is not None:
-                raise ValueError("Specify either keep or fix, not both")
-            fix = [pname for pname in self.stat.model.param_names if pname not in keep]
+    def __call__(self, data=hypney.NotChanged):
+        if data is not hypney.NotChanged:
+            stat = self.stat.freeze(data=data)
+        return self._compute(stat)
 
-        if fix is None:
-            fix = dict()
-        if isinstance(fix, (tuple, list)):
-            fix = {pname: self.stat.model.defaults[pname] for pname in fix}
-        fix = self.stat.model.validate_params(fix, set_defaults=False)
-        self.fix = fix
-
-    def __call__(self, data):
+    def _compute(self, stat):
         raise NotImplementedError

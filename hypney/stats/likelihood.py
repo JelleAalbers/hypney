@@ -47,10 +47,9 @@ class PLR(LikelihoodRatio):
         return {pname: val for pname, val in params.items() if pname in self.poi}
 
     def _compute(self, params):
-        conditional_bestfit = self.max_estimator(self.ll, fix=self._filter_poi(params))(
-            self.data
-        )
-        return -2 * (self.ll(conditional_bestfit, self.data) - self.ll_bestfit)
+        conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
+        conditional_fit = self.max_estimator(conditional_ll)
+        return -2 * (self.ll(conditional_fit) - self.ll_bestfit)
 
     def _build_dist(self):
         return hypney.models.Chi2(df=len(self.poi))

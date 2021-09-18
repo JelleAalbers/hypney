@@ -146,7 +146,14 @@ class Model(hypney.DataContainer):
         """
         if fix is None and keep is None:
             return self
+        fix = self._process_fix_keep(fix, keep)
+        return hypney.models.TransformedModel(
+            orig_model=self,
+            param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
+            transform_params=functools.partial(_merge_dicts, fix),
+        )
 
+    def _process_fix_keep(self, fix=None, keep=None):
         if keep is not None:
             if fix is not None:
                 raise ValueError("Specify either free or fix, not both")
@@ -162,12 +169,7 @@ class Model(hypney.DataContainer):
             fix = {pname: self.defaults[pname] for pname in fix}
 
         fix = self.validate_params(fix, set_defaults=False)
-        return hypney.models.TransformedModel(
-            orig_model=self,
-            data=self.data,
-            param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
-            transform_params=functools.partial(_merge_dicts, fix),
-        )
+        return fix
 
     ##
     # Input validation

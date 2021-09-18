@@ -14,8 +14,7 @@ class Minimum(hypney.Estimator):
     def _free_params(self):
         return [p for p in self.stat.model.param_specs if p.name not in self.fix]
 
-    def __call__(self, data):
-        stat = self.stat.freeze(data)
+    def _compute(self, stat):
         guess = np.array([p.default for p in self._free_params()])
         bounds = [(p.min, p.max) for p in self._free_params()]
 

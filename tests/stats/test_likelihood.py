@@ -24,7 +24,7 @@ def test_lr():
     # Likelihood with all parameters free
     lr = hypney.stats.LikelihoodRatio(m, data=data)
 
-    # Best fit should be a very sharp Gaussian with rate =1
+    # Best fit should be a very sharp Gaussian with rate = 1
     min_scale = m.param_spec_for("scale").min
     assert np.isclose(lr.bestfit["rate"], 1)
     assert np.isclose(lr.bestfit["scale"], min_scale)

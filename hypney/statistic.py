@@ -53,7 +53,7 @@ class Statistic(hypney.DataContainer):
         super()._init_data()
 
     def freeze(self, data=NotChanged) -> Statistic:
-        """Return a model with possibly changed data"""
+        """Return a statistic with possibly changed data"""
         if data is NotChanged:
             return self
         new_self = copy(self)
