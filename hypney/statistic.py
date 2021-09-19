@@ -51,7 +51,7 @@ class Statistic:
         """Initialize self.data (either from construction or data change)"""
         pass
 
-    def freeze(self, data=NotChanged):
+    def set(self, data=NotChanged):
         """Return a statistic with possibly changed data"""
         if data is NotChanged:
             return self
@@ -59,23 +59,30 @@ class Statistic:
         new_self._set_data(data)
         return new_self
 
-    def __call__(self, params: dict = None, data=NotChanged) -> float:
-        self = self.freeze(data)
+    def __call__(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.compute(data=data, params=params, **kwargs)
+
+    def compute(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.compute_(data=data, params=params, **kwargs).raw
+
+    def compute_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        self = self.set(data)
         if self.data is None:
             raise ValueError("Must provide data")
 
-        params = self.model.validate_params(params)
+        params = self.model.validate_params(params, **kwargs)
         return self._compute(params)
 
     def _compute(self, params):
         raise NotImplementedError
 
-    def rvs(self, size=1, params=None) -> np.ndarray:
+    def rvs(self, size=1, params=None, **kwargs) -> np.ndarray:
         """Return statistic evaluated on simulated data,
         generated from model with params"""
+        params = self.model.validate_params(params, **kwargs)
         results = np.zeros(size)
         for i in range(size):
-            sim_data = self.model.simulate(params=params)
+            sim_data = self.model._simulate(params=params)
             results[i] = self(data=sim_data, params=params).numpy().item()
         return results
 
@@ -95,7 +102,7 @@ class IndependentStatistic(Statistic):
         super()._init_data()
 
     def __call__(self, params: dict = None, data=NotChanged):
-        self = self.freeze(data)
+        self = self.set(data)
         if self.data is None:
             raise ValueError("Must provide data")
         return self._result

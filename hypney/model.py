@@ -88,37 +88,13 @@ class Model:
             [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
         )
 
-    # TODO: freeze is a poor name, can change things twice...
-    # copy is worse since we may not copy
-    def freeze(
-        self,
-        name=NotChanged,
-        data=NotChanged,
-        cut=NotChanged,
-        fix=None,
-        keep=None,
-        **new_defaults,
-    ):
-        """Return a model with possibly changed name, defaults, data, or parameters"""
-        if (
-            name is NotChanged
-            and data is NotChanged
-            and cut is NotChanged
-            and not new_defaults
-            and fix is None
-            and keep is None
-        ):
-            return self
-        new_self = copy(self)
-        if name is not NotChanged:
-            new_self.name = name
-        new_self._validate_and_set_defaults(new_defaults)
-        if data is not NotChanged:
-            new_self._set_data(data)
-        if cut is not NotChanged:
-            new_self._set_cut(cut)
-        new_self = new_self.filter_params(fix=fix, keep=keep)
-        return new_self
+    def _set_cut(self, cut):
+        self.cut = self.validate_cut(cut)
+        self._init_cut()
+
+    def _init_cut(self):
+        """Called during initialization, if cut is to be frozen"""
+        pass
 
     def _has_redefined(self, method_name, from_base=None):
         """Returns if method_name is redefined from Model.method_name"""
@@ -129,20 +105,12 @@ class Model:
             return True
         return f.__func__ is not getattr(from_base, method_name)
 
-    def _set_cut(self, cut):
-        self.cut = self.validate_cut(cut)
-        self._init_cut()
-
-    def _init_cut(self):
-        """Called during initialization, if cut is to be frozen"""
-        pass
-
     ##
     # Creating new models from old
     ##
 
-    def __call__(self, *args, **kwargs):
-        return self.freeze(*args, **kwargs)
+    def __call__(self, **kwargs):
+        return self.set(**kwargs)
 
     def __add__(self, other):
         return hypney.models.Mixture(self, other)
@@ -150,68 +118,101 @@ class Model:
     def __pow__(self, other):
         return hypney.models.TensorProduct(self, other)
 
-    def filter_params(self, fix=None, keep=None):
+    def set(
+        self,
+        *,
+        name=NotChanged,
+        data=NotChanged,
+        cut=NotChanged,
+        fix=None,
+        fix_except=None,
+        **new_defaults,
+    ):
+        """Return a model with possibly changed name, defaults, data, or parameters"""
+        if (
+            name is NotChanged
+            and data is NotChanged
+            and cut is NotChanged
+            and not new_defaults
+            and fix is None
+            and fix_except is None
+        ):
+            return self
+        new_self = copy(self)
+        if name is not NotChanged:
+            new_self.name = name
+        new_self._validate_and_set_defaults(new_defaults)
+        if data is not NotChanged:
+            new_self._set_data(data)
+        if cut is not NotChanged:
+            new_self._set_cut(cut)
+        if fix is not None:
+            new_self = new_self.fix(fix)
+            if fix_except is not None:
+                raise ValueError("Provide either fix or fix_except, not both")
+        if fix_except is not None:
+            new_self = new_self.fix_except(fix)
+        return new_self
+
+    def fix(self, params=None, **kwargs):
         """Return new model with parameters in fix fixed
 
         Args:
-         - fix: sequence of parameter names to fix, or dict of parameters
-            to fix to specific values
-         - free: sequence of parameter names to keep free, others will be
-            fixed to their defaults.
+         - params: sequence of parameter names to fix, or dict of parameters
+            to fix to specific values.
 
-        Either fix or free may be specified, but not both.
+        Other keyword arguments will be added to params.
         """
-        if fix is None and keep is None:
-            return self
-        fix = self._process_fix_keep(fix, keep)
+        if params is None:
+            params = dict()
+        if isinstance(params, str):
+            params = (params,)
+        if isinstance(params, (list, tuple)):
+            params = {pname: self.defaults[pname] for pname in params}
+        return self._fix(_merge_dicts(params, kwargs))
+
+    def fix_except(self, keep=tuple()):
+        """Return new model with only parameters named in keep;
+        other paramters will be fixed to their defaults.
+
+        Args:
+         - keep: sequence of parameters that should remain
+        """
+        if isinstance(keep, str):
+            keep = (keep,)
+        return self.fix([pname for pname in self.param_names if pname not in keep])
+
+    def _fix(self, fix):
+        fix = self.validate_params(fix, set_defaults=False)
         return hypney.models.TransformedModel(
             orig_model=self,
             param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
             transform_params=functools.partial(_merge_dicts, fix),
         )
 
-    def _process_fix_keep(self, fix=None, keep=None):
-        if keep is not None:
-            if fix is not None:
-                raise ValueError("Specify either free or fix, not both")
-            if isinstance(keep, str):
-                keep = (keep,)
-            fix = [pname for pname in self.param_names if pname not in keep]
-
-        if fix is None:
-            fix = dict()
-        if isinstance(fix, str):
-            fix = (fix,)
-        if isinstance(fix, (tuple, list)):
-            fix = {pname: self.defaults[pname] for pname in fix}
-
-        fix = self.validate_params(fix, set_defaults=False)
-        return fix
-
     ##
     # Input validation
     ##
 
-    def validate_params(self, params: dict, set_defaults=True) -> dict:
+    def validate_params(self, params: dict = None, set_defaults=True, **kwargs) -> dict:
+        """Return dictionary of parameters for the model.
+
+        Args:
+         - params: Dictionary of parameters
+         - set_defaults: Whether missing parameters should be set
+            to their defaults (default True).
+
+        Other keyword arguments are merged with params.
+        """
         if params is None:
             params = dict()
         if not isinstance(params, dict):
             raise ValueError(f"Params must be a dict, got {type(params)}")
+        params = _merge_dicts(params, kwargs)
 
         if set_defaults:
             for p in self.param_specs:
                 params.setdefault(p.name, p.default)
-
-        # Bounds check
-        # -- disabled since autograd libraries hate these ifs
-        # for p in self.param_specs:
-        #     if p.name not in params:
-        #         continue
-        #     val = params[p.name]
-        #     if not p.min <= params[p.name] < p.max:
-        #         raise ValueError(
-        #             f"{val} is out of bounds {(p.min, p.max)} for {p.name}"
-        #         )
 
         # Flag spurious parameters
         spurious = set(params.keys()) - set(self.param_names)
@@ -221,6 +222,8 @@ class Model:
         return params
 
     def validate_data(self, data) -> ep.TensorType:
+        """Return an (n_events, n_observables) eagerpy tensor from data
+        """
         if data is None:
             raise ValueError("None is not valid as data")
         # Shorthand data specifications
@@ -243,6 +246,8 @@ class Model:
         return data
 
     def validate_cut(self, cut):
+        """Return a valid cut, i.e. NoCut or tuple of (l, r) tuples for each observable.
+        """
         if cut is hypney.NoCut:
             return cut
         if cut is None:
@@ -260,7 +265,7 @@ class Model:
         return cut
 
     ##
-    # Simulation
+    # Simulation. These functions return numpy arrays, not eagerpy tensors.
     ##
 
     @property
@@ -269,8 +274,8 @@ class Model:
             self, "rate_before_efficiencies"
         )
 
-    def simulate(self, params: dict = None, *, cut=NotChanged) -> np.ndarray:
-        params = self.validate_params(params)
+    def simulate(self, params: dict = None, *, cut=NotChanged, **kwargs) -> np.ndarray:
+        params = self.validate_params(params, **kwargs)
         return self(cut=cut)._simulate(params)
 
     def _simulate(self, params) -> np.ndarray:
@@ -285,27 +290,37 @@ class Model:
         else:
             mu = self._rate(params)
             n = np.random.poisson(mu)
-            data = self._rvs(params, size=n)
+            data = self._rvs(size=n, params=params)
             assert len(data) == n
-            data = self.apply_cut(data).raw
+            data = self.apply_cut_(data).raw
 
         return data
 
-    def rvs(self, params: dict = None, size: int = 1) -> np.ndarray:
+    def rvs(self, size: int = 1, params: dict = None, **kwargs) -> np.ndarray:
+        params = self.validate_params(params, **kwargs)
         if self.simulate_partially_efficient:
             # Could simulate an excess of events, remove unneeded ones?
             raise NotImplementedError
-        params = self.validate_params(params)
-        return self._rvs(params, size)
+        return self._rvs(size, params)
 
-    def _rvs(self, params: dict, size: int):
+    def _rvs(self, size: int, params: dict):
         raise NotImplementedError
 
     ##
     # Methods using data
+    #   * _x: Internal function.
+    #       Takes and returns eagerpy tensors.
+    #       Uses self.data and self.cut, assumes params have been validated.
+    #   * x_: 'Friendly' function for use in other hypney classes.
+    #       Flexible input, returns eagerpy tensors.
+    #   * x: External function, for users to call directly.
+    #       Flexible input, returm value has same type as data.
     ##
 
     def apply_cut(self, data=NotChanged, cut=NotChanged):
+        return self.apply_cut_(data=data, cut=cut).raw
+
+    def apply_cut_(self, data=NotChanged, cut=NotChanged):
         return self(data=data, cut=cut)._apply_cut()
 
     def _apply_cut(self):
@@ -317,9 +332,14 @@ class Model:
         return self.data[passed]
 
     def diff_rate(
-        self, params: dict = None, data: ep.TensorType = NotChanged, *, cut=NotChanged
+        self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
+    ):
+        return self.diff_rate_(data=data, params=params, cut=cut, **kwargs).raw
+
+    def diff_rate_(
+        self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
     ) -> ep.TensorType:
-        params = self.validate_params(params)
+        params = self.validate_params(params, **kwargs)
         return self(data=data, cut=cut)._diff_rate(params)
 
     def _diff_rate(self, params: dict):
@@ -330,11 +350,14 @@ class Model:
             )
         return self._pdf(params=params) * self._rate(params=params)
 
-    def pdf(
-        self, params: dict = None, data: ep.TensorType = NotChanged
+    def pdf(self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs):
+        return self.pdf_(data=data, params=params, cut=cut, **kwargs).raw
+
+    def pdf_(
+        self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
     ) -> ep.TensorType:
-        params = self.validate_params(params)
-        return self(data=data)._pdf(params)
+        params = self.validate_params(params, **kwargs)
+        return self(data=data, cut=cut)._pdf(params)
 
     def _pdf(self, params: dict):
         if not self._has_redefined("_diff_rate"):
@@ -342,32 +365,35 @@ class Model:
                 "Can't compute pdf of a Model implementing "
                 "neither _pdf nor _diff_rate"
             )
-        return self._diff_rate(self.data, params) / self.rate(params)
+        return self._diff_rate(self.data, params) / self._rate(params)
 
-    def cdf(
-        self, params: dict = None, data: ep.TensorType = NotChanged
+    def cdf(self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs):
+        return self.cdf_(data=data, params=params, cut=cut, **kwargs).raw
+
+    def cdf_(
+        self, data=NotChanged, params: dict = None, *, cut=cut, **kwargs
     ) -> ep.TensorType:
-        params = self.validate_params(params)
-        return self(data=data)._cdf(params)
+        params = self.validate_params(params, **kwargs)
+        return self(data=data, cut=cut)._cdf(params)
 
     def _cdf(self, params: dict):
         raise NotImplementedError
 
     ##
-    # Methods not using data
+    # Methods not using data; return a simple float
+    # As above, _x are internal functions (use self.data and self.cut)
+    # whereas x are external functions (do input validation, set data and cut if needed)
     ##
 
-    def rate(self, params: dict = None, cut=NotChanged) -> ep.TensorType:
-        params = self.validate_params(params)
-        return self._rate(params) * self(cut=cut).cut_efficiency(params=params)
+    def rate(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+        params = self.validate_params(params, **kwargs)
+        return self(cut=cut)._rate(params)
 
     def _rate(self, params: dict):
-        return params[hypney.DEFAULT_RATE_PARAM.name]
+        return params[hypney.DEFAULT_RATE_PARAM.name] * self._cut_efficiency(params)
 
-    def cut_efficiency(
-        self, params: dict = None, cut=NotChanged,
-    ):
-        params = self.validate_params(params)
+    def cut_efficiency(self, params: dict = None, cut=NotChanged, **kwargs) -> float:
+        params = self.validate_params(params, **kwargs)
         return self(cut=cut)._cut_efficiency(params)
 
     def _cut_efficiency(self, params: dict):
@@ -391,9 +417,8 @@ class Model:
                 )
             ]
         )
-        return ((signs) * self.cdf(params=params, data=points)).sum()
+        return ((signs) * self.cdf_(data=points, params=params)).sum()
 
 
 def _merge_dicts(x, y):
-    # Lambda function / closure wouldn't pickle..
     return {**x, **y}

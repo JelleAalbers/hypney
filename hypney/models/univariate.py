@@ -10,49 +10,9 @@ import hypney
 
 export, __all__ = hypney.exporter()
 
-
-# TODO: We must check that the parametrizations of the distirbutions
-# are consistent between scipy, jax, torch, tf...
-# Cannot just assume this; it will silently corrupt users' results if not!
-
-TORCH_DISTRIBUTION_NAMES = dict(
-    # Distributions with different names in torch.distributions
-    # Several other distributions are also supported
-    # but their names differ only by capitalization (cauchy, chi2, ...)
-    norm="Normal",
-    epon="Exponential",
-    f="FisherSnedecor",
-    gumbel_r="Gumbel",
-    halfcauchy="HalfCauchy",
-    halfnorm="HalfNormal",
-    lognorm="LogNormal",
-    t="StudentT",
-    vonmises="VonMises",
-    weibull_min="Weibull",
-    binom="Binomial",
-    geom="Geometric",
-    nbinom="NegativeBinomial",
-)
-
-
-TFP_DISTRIBUTION_NAMES = dict(
-    norm="Normal",
-    epon="Exponential",
-    gumbel_r="Gumbel",
-    halfcauchy="HalfCauchy",
-    halfnorm="HalfNormal",
-    invgamma="InverseGamma",
-    lognorm="LogNormal",
-    t="StudentT",
-    # triang='Triangular',   # different parametrization
-    # truncnorm='TruncatedNormal',   # different parametrization?
-    vonmises="VonMises",
-    weibull_min="Weibull",
-    betabinom="BetaBinomial",
-    binom="Binomial",
-    geom="Geometric",
-    nbinom="NegativeBinomial",
-)
+##
+# Univariate scipy.stats (and jax.scipy.stats) distributions
+##
 
 
 class ScipyUnivariate(hypney.Model):
@@ -121,7 +81,7 @@ class ScipyUnivariate(hypney.Model):
         self._dists[modname] = result
         return result
 
-    def _rvs(self, params: dict, size: int = 1) -> ep.TensorType:
+    def _rvs(self, size: int, params: dict) -> ep.TensorType:
         return self.scipy_dist.rvs(size=size, **self._dist_params(params))[:, None]
 
     def _pdf(self, params: dict) -> ep.TensorType:
@@ -133,6 +93,109 @@ class ScipyUnivariate(hypney.Model):
         return ep.astensor(
             self.dist().cdf(self.data[:, 0].raw, **self._dist_params(params))
         )
+
+
+# Create classes for all continuous distributions
+for dname in dir(stats):
+    dist = getattr(stats, dname)
+    if not isinstance(dist, (stats.rv_continuous, stats.rv_discrete)):
+        continue
+    is_discrete = isinstance(dist, stats.rv_discrete)
+
+    # Construct appropriate param spec for this distribution.
+    # Discrete distributions don't have a scale parameter.
+    # We'll assume shape parameters are positive and have default 0...
+    # TODO: this can't always be true!
+    spec = list(hypney.RATE_LOC_PARAMS if is_discrete else hypney.RATE_LOC_SCALE_PARAMS)
+    if dist.shapes:
+        for pname in dist.shapes.split(", "):
+            spec.append(
+                hypney.ParameterSpec(name=pname, min=0, max=float("inf"), default=0)
+            )
+
+    # Create the new class
+    dname = dname.capitalize()
+    locals()[dname] = dist_class = type(dname, (ScipyUnivariate,), dict())
+    dist_class.scipy_dist = dist
+    dist_class.param_specs = tuple(spec)
+    if is_discrete:
+        dist_class.observables = (
+            hypney.Observable(
+                name=hypney.DEFAULT_OBSERVABLE.name,
+                min=-float("inf"),
+                max=float("inf"),
+                integer=True,
+            ),
+        )
+    export(dist_class)
+
+
+@export
+class From1DHistogram(ScipyUnivariate):
+    def __init__(self, histogram, bin_edges=None, *args, **kwargs):
+        if bin_edges is None:
+            # We probably got some kind of histogram container
+            if isinstance(histogram, tuple) and len(histogram) == 2:
+                histogram, bin_edges = histogram
+            elif hasattr(histogram, "to_numpy"):
+                # boost_histogram / hist
+                histogram, bin_edges = histogram.to_numpy()
+            elif hasattr(histogram, "bin_edges"):
+                # multihist
+                histogram, bin_edges = histogram.histogram, histogram.bin_edges
+            else:
+                raise ValueError("Pass histogram and bin edges arrays")
+
+        self.scipy_dist = stats.rv_histogram((histogram, bin_edges),)
+        super().__init__(*args, **kwargs)
+
+
+##
+# Tensorflow / Pytorch support
+##
+
+# TODO: We must check that the parametrizations of the distributions
+# are consistent between scipy, jax, torch, tf...
+# Cannot just assume this; it will silently corrupt users' results if not!
+
+TORCH_DISTRIBUTION_NAMES = dict(
+    # Distributions with different names in torch.distributions
+    # Several other distributions are also supported
+    # but their names differ only by capitalization (cauchy, chi2, ...)
+    norm="Normal",
+    epon="Exponential",
+    f="FisherSnedecor",
+    gumbel_r="Gumbel",
+    halfcauchy="HalfCauchy",
+    halfnorm="HalfNormal",
+    lognorm="LogNormal",
+    t="StudentT",
+    vonmises="VonMises",
+    weibull_min="Weibull",
+    binom="Binomial",
+    geom="Geometric",
+    nbinom="NegativeBinomial",
+)
+
+
+TFP_DISTRIBUTION_NAMES = dict(
+    norm="Normal",
+    epon="Exponential",
+    gumbel_r="Gumbel",
+    halfcauchy="HalfCauchy",
+    halfnorm="HalfNormal",
+    invgamma="InverseGamma",
+    lognorm="LogNormal",
+    t="StudentT",
+    # triang='Triangular',   # different parametrization
+    # truncnorm='TruncatedNormal',   # different parametrization?
+    vonmises="VonMises",
+    weibull_min="Weibull",
+    betabinom="BetaBinomial",
+    binom="Binomial",
+    geom="Geometric",
+    nbinom="NegativeBinomial",
+)
 
 
 class TorchDistributionWrapper:
@@ -195,58 +258,3 @@ class TFPDistributionWrapper(TorchDistributionWrapper):
     def pdf(self, data, **params):
         params, x0, x_scale = self._patch_params(params, data)
         return self.dist(**params).prob((data - x0) / x_scale) / x_scale
-
-
-@export
-class From1DHistogram(ScipyUnivariate):
-    def __init__(self, histogram, bin_edges=None, *args, **kwargs):
-        if bin_edges is None:
-            # We probably got some kind of histogram container
-            if isinstance(histogram, tuple) and len(histogram) == 2:
-                histogram, bin_edges = histogram
-            elif hasattr(histogram, "to_numpy"):
-                # boost_histogram / hist
-                histogram, bin_edges = histogram.to_numpy()
-            elif hasattr(histogram, "bin_edges"):
-                # multihist
-                histogram, bin_edges = histogram.histogram, histogram.bin_edges
-            else:
-                raise ValueError("Pass histogram and bin edges arrays")
-
-        self.scipy_dist = stats.rv_histogram((histogram, bin_edges),)
-        super().__init__(*args, **kwargs)
-
-
-# Create classes for all continuous distributions
-for dname in dir(stats):
-    dist = getattr(stats, dname)
-    if not isinstance(dist, (stats.rv_continuous, stats.rv_discrete)):
-        continue
-    is_discrete = isinstance(dist, stats.rv_discrete)
-
-    # Construct appropriate param spec for this distribution.
-    # Discrete distributions don't have a scale parameter.
-    # We'll assume shape parameters are positive and have default 0...
-    # TODO: this can't always be true!
-    spec = list(hypney.RATE_LOC_PARAMS if is_discrete else hypney.RATE_LOC_SCALE_PARAMS)
-    if dist.shapes:
-        for pname in dist.shapes.split(", "):
-            spec.append(
-                hypney.ParameterSpec(name=pname, min=0, max=float("inf"), default=0)
-            )
-
-    # Create the new class
-    dname = dname.capitalize()
-    locals()[dname] = dist_class = type(dname, (ScipyUnivariate,), dict())
-    dist_class.scipy_dist = dist
-    dist_class.param_specs = tuple(spec)
-    if is_discrete:
-        dist_class.observables = (
-            hypney.Observable(
-                name=hypney.DEFAULT_OBSERVABLE.name,
-                min=-float("inf"),
-                max=float("inf"),
-                integer=True,
-            ),
-        )
-    export(dist_class)

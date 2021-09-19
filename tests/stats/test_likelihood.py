@@ -30,7 +30,7 @@ def test_lr():
     assert np.isclose(lr.bestfit["scale"], min_scale)
     assert np.isclose(lr.bestfit["loc"], 0)
 
-    double_rate = lr(params={**lr.bestfit, **dict(rate=2)}).numpy()
+    double_rate = lr(params={**lr.bestfit, **dict(rate=2)})
     assert np.isclose(
         double_rate,
         -2
@@ -43,6 +43,6 @@ def test_lr():
     )
 
     # # Likelihood with only the rate free
-    lr = hypney.stats.LikelihoodRatio(m.filter_params(keep="rate"), data=data)
+    lr = hypney.stats.LikelihoodRatio(m.fix_except("rate"), data=data)
     assert np.isclose(lr.bestfit["rate"], 1)
     assert len(lr.bestfit) == 1

@@ -12,4 +12,4 @@ class Count(hypney.IndependentStatistic):
         return hypney.models.Poisson()
 
     def _dist_params(self, params):
-        return dict(mu=self.model.rate(params))
+        return dict(mu=self.model._rate(params))

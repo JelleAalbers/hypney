@@ -1,4 +1,5 @@
 import numpy as np
+import eagerpy as ep
 
 import hypney
 
@@ -10,10 +11,10 @@ class DiracDelta(hypney.Model):
     param_specs = hypney.RATE_LOC_PARAMS
 
     def _cdf(self, params):
-        return np.where(self.data[:, 0] > params["loc"], 1, 0)
+        return ep.where(self.data[:, 0] > params["loc"], 1, 0)
 
     def _pdf(self, params):
-        return np.where(self.data[:, 0] == params["loc"], float("inf"), 0)
+        return ep.where(self.data[:, 0] == params["loc"], float("inf"), 0)
 
-    def _rvs(self, params, size) -> np.ndarray:
+    def _rvs(self, size: int, params: dict) -> np.ndarray:
         return np.ones((size, 1)) * params["loc"]

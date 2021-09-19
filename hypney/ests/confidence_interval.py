@@ -13,10 +13,10 @@ class UpperLimit(hypney.Estimator):
         super().__init__(*args, **kwargs)
 
     def __call__(self, data, bestfit):
-        stat = self.stat.freeze(data)
+        stat = self.stat.set(data)
 
         def objective(params):
-            return self.cl - stat.dist.cdf(data=stat(params), params=params)
+            return self.cl - stat.dist.cdf_(data=stat(params), params=params)
 
         if self.poi_max is not None:
             poi_max = self.poi_max

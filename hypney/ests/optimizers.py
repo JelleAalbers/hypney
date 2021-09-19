@@ -12,7 +12,7 @@ export, __all__ = hypney.exporter()
 class MinimumAndValue(hypney.Estimator):
     sign = 1
 
-    def _compute(self, stat):
+    def _compute(self, stat: hypney.Statistic):
         guess = np.array([p.default for p in self._free_params()])
         bounds = [(p.min, p.max) for p in self._free_params()]
 
@@ -20,7 +20,9 @@ class MinimumAndValue(hypney.Estimator):
             jac = None
 
             def fun(params):
-                result = self.sign * stat(params=self._param_sequence_to_dict(params))
+                result = self.sign * stat._compute(
+                    params=self._param_sequence_to_dict(params)
+                )
                 return ep_util.np64(result)
 
         else:
@@ -29,7 +31,7 @@ class MinimumAndValue(hypney.Estimator):
             def _fun(params):
                 result, grad = ep.value_and_grad(
                     lambda param_tensor: self.sign
-                    * stat(params=self._param_sequence_to_dict(param_tensor)),
+                    * stat._compute(params=self._param_sequence_to_dict(param_tensor)),
                     params,
                 )
                 return result, grad

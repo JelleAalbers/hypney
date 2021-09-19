@@ -85,14 +85,14 @@ class Mixture(AssociativeCombination):
         self.models = tuple([m(data=self.data) for m in self.models])
         super()._init_data()
 
-    def _rvs(self, params: dict, size: int = 1) -> ep.types.NativeTensor:
+    def _rvs(self, size: int, params: dict) -> ep.types.NativeTensor:
         n_from = np.random.multinomial(size, self._f_per_model(params))
         return ep.concatenate(
             [
-                ep.astensor(m._rvs(params=ps, size=_n))
+                ep.astensor(m._rvs(size=_n, params=ps))
                 for _n, (m, ps) in zip(n_from, self._iter_models_params(params))
             ]
-        ).raw
+        )
 
     def _rate(self, params: dict) -> ep.TensorType:
         return sum(self._rate_per_model(params))
@@ -166,14 +166,14 @@ class TensorProduct(AssociativeCombination):
         self.models = tuple([m(cut=c) for m, c in zip(self.models, _cut_list)])
         super()._init_cut()
 
-    def _rvs(self, params: dict, size: int) -> ep.TensorType:
+    def _rvs(self, size: int, params: dict) -> ep.TensorType:
         return ep.concatenate(
             [
-                ep.astensor(m._rvs(params=ps, size=size))
+                ep.astensor(m._rvs(size=size, params=ps))
                 for m, ps in self._iter_models_params(params)
             ],
             axis=-1,
-        ).raw
+        )
 
     def _rate(self, params: dict):
         # First model controls the rate

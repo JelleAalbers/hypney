@@ -26,21 +26,14 @@ def test_uniform():
     assert data.shape == (5, 1)
 
     # Test different data formats and pdf
-    assert (
-        m.pdf(data=0)
-        == m.pdf(data=[0])
-        == m.pdf(data=np.array([0]))
-        == m.pdf(data=np.array([[0]]))
-    )
-    assert m.pdf(data=0) == 1.0
+    assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
+    assert m.pdf(0) == 1.0
 
     # Test cdf
-    np.testing.assert_array_equal(
-        m.cdf(data=[0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0])
-    )
+    np.testing.assert_array_equal(m.cdf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
 
     # Test diff rate
-    assert m.diff_rate(data=0.0) == 0.0
+    assert m.diff_rate(0.0) == 0.0
 
     # Test making models with new defaults
     m2 = m(rate=50)
@@ -80,7 +73,7 @@ def test_beta():
     assert data.min() > 0
     assert data.max() < 1
 
-    np.testing.assert_equal(m.pdf(data=data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
+    np.testing.assert_equal(m.pdf(data), stats.beta(a=0.5, b=0.5).pdf(data[:, 0]))
     assert m.rate() == 100.0
 
     m2 = m(rate=20, loc=-100, scale=10)
@@ -96,7 +89,7 @@ def test_beta():
 def test_poisson():
     m = hypney.models.Poisson(mu=3, rate=100)
     data = m.simulate()
-    np.testing.assert_equal(m.pdf(data=data), stats.poisson(mu=3).pmf(data[:, 0]))
+    np.testing.assert_equal(m.pdf(data), stats.poisson(mu=3).pmf(data[:, 0]))
     assert m.rate() == 100.0
 
 
@@ -105,5 +98,5 @@ def test_from_histogram():
     m = hypney.models.From1DHistogram(hist, edges)
     data = m.simulate()
     np.testing.assert_equal(
-        m.pdf(data=data), stats.rv_histogram((hist, edges),).pdf(data[:, 0]),
+        m.pdf(data), stats.rv_histogram((hist, edges),).pdf(data[:, 0]),
     )

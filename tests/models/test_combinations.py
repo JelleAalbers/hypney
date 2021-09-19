@@ -20,7 +20,7 @@ def test_mixture():
     assert mix.diff_rate(data=0) == 60.0
 
     np.testing.assert_array_equal(
-        mix.cdf(data=[0.0, 0.5, 1.0]).raw, np.array([0.0, 0.5, 1.0])
+        mix.cdf(data=[0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0])
     )
 
     assert mix.simulate().shape[0] > 0
@@ -48,8 +48,8 @@ def test_tensor_product():
 
     data = np.array([[0, 0, 0], [1, 1, 1]])
 
-    np.testing.assert_array_equal(prod.pdf(data=data).raw, np.array([1, 1]))
-    np.testing.assert_array_equal(prod.cdf(data=data).raw, np.array([0, 1]))
+    np.testing.assert_array_equal(prod.pdf(data=data), np.array([1, 1]))
+    np.testing.assert_array_equal(prod.cdf(data=data), np.array([0, 1]))
 
     assert prod.rate() == 40.0
     data = prod.simulate()

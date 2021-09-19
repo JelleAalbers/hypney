@@ -3,7 +3,6 @@ import itertools
 import typing as ty
 
 import eagerpy as ep
-import numpy as np
 
 import hypney
 
@@ -129,9 +128,12 @@ class Interpolation(hypney.Model):
         params = self.validate_params(params)
         anchor_tuple = self._params_to_anchor_tuple(params)
         result = self._interpolators[itp_name]([anchor_tuple])[0]
-        if isinstance(result, np.ndarray):
-            result = ep.astensor(result)
-        return result
+        if itp_name in self.data_methods_to_interpolate:
+            # Vector result
+            return ep.astensor(result)
+        else:
+            # Scalar result
+            return result
 
     def _params_to_anchor_tuple(self, params):
         return tuple([params[p.name] for p in self.param_specs if p.anchors])
@@ -140,7 +142,7 @@ class Interpolation(hypney.Model):
         """Call Model.method_name for anchor model at params"""
         return getattr(self.anchor_models[param_tuple], method_name)()
 
-    def _rvs(self, params: dict = None, size: int = 1) -> ep.TensorType:
+    def _rvs(self, size: int, params: dict) -> ep.TensorType:
         anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             # Dig into interpolator to get weight for each anchor,

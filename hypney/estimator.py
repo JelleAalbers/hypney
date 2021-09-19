@@ -7,13 +7,14 @@ export, __all__ = hypney.exporter()
 class Estimator:
     stat: hypney.Statistic
 
-    def __init__(self, stat, fix=None, keep=None):
+    # TODO: fix_except option
+    def __init__(self, stat: hypney.Statistic, fix: dict = None):
         self.stat = stat
-        self.fix = self.stat.model._process_fix_keep(fix, keep)
+        self.fix = self.stat.model.validate_params(fix, set_defaults=False)
 
     def __call__(self, data=hypney.NotChanged):
         if data is not hypney.NotChanged:
-            stat = self.stat.freeze(data=data)
+            stat = self.stat.set(data=data)
         else:
             if self.stat.data is None:
                 raise ValueError("Provide data")

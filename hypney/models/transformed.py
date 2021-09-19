@@ -84,10 +84,10 @@ class TransformedModel(hypney.Model):
             self._orig_model._simulate(self._transform_params(params))
         )
 
-    def _rvs(self, params, size):
+    def _rvs(self, size: int, params: dict):
         self._check_reverse_transform()
         return self._reverse_transform_data(
-            self._orig_model._rvs(self._transform_params(params), size)
+            self._orig_model._rvs(size=size, params=self._transform_params(params))
         )
 
     ##
