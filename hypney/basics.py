@@ -1,7 +1,4 @@
-import collections
 import typing as ty
-
-import numpy as np
 
 import hypney as hp
 

@@ -47,10 +47,11 @@ class Model:
         self,
         name="",
         data=None,
+        params=NotChanged,   # Really defaults...
         param_specs=NotChanged,
         observables=NotChanged,
         cut=NotChanged,
-        **new_defaults,
+        **kwargs,
     ):
         self.name = name
 
@@ -62,7 +63,7 @@ class Model:
         if cut is not NotChanged:
             self._set_cut(cut)
 
-        self._validate_and_set_defaults(new_defaults)
+        self._validate_and_set_defaults(params, **kwargs)
         self._set_data(data)
 
     def _set_data(self, data=hypney.NotChanged):
@@ -82,8 +83,10 @@ class Model:
         """Initialize self.data (either from construction or data change)"""
         pass
 
-    def _validate_and_set_defaults(self, new_defaults: dict):
-        new_defaults = self.validate_params(new_defaults)
+    def _validate_and_set_defaults(self, new_defaults: dict = NotChanged, **kwargs: dict):
+        if new_defaults == NotChanged:
+            new_defaults = dict()
+        new_defaults = self.validate_params(new_defaults, **kwargs)
         self.param_specs = tuple(
             [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
         )
@@ -123,17 +126,19 @@ class Model:
         *,
         name=NotChanged,
         data=NotChanged,
+        params=NotChanged,
         cut=NotChanged,
         fix=None,
         fix_except=None,
-        **new_defaults,
+        **kwargs,
     ):
         """Return a model with possibly changed name, defaults, data, or parameters"""
         if (
             name is NotChanged
             and data is NotChanged
             and cut is NotChanged
-            and not new_defaults
+            and not params
+            and not kwargs
             and fix is None
             and fix_except is None
         ):
@@ -141,7 +146,7 @@ class Model:
         new_self = copy(self)
         if name is not NotChanged:
             new_self.name = name
-        new_self._validate_and_set_defaults(new_defaults)
+        new_self._validate_and_set_defaults(params, **kwargs)
         if data is not NotChanged:
             new_self._set_data(data)
         if cut is not NotChanged:

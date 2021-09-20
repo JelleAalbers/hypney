@@ -72,5 +72,5 @@ class MaximumAndValue(MinimumAndValue):
 
 
 @export
-class Maximum(MinimumAndValue):
+class Maximum(Minimum):
     sign = -1
