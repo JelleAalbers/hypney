@@ -119,6 +119,14 @@ class TransformedModel(hypney.Model):
     def _rate(self, params):
         return self._orig_model._rate(self._transform_params(params))
 
+    def _mean(self, params):
+        orig_mean = self._orig_model._mean(self._transform_params(params))
+        return self._reverse_transform_data(orig_mean)
+
+    def _std(self, params: dict):
+        orig_std = self._orig_model._std(self._transform_params(params))
+        return orig_std / self._data_scale
+
     def _cut_efficiency(self, params: dict):
         return self._orig_model._cut_efficiency(self._transform_params(params))
 

@@ -35,6 +35,11 @@ def test_uniform():
     # Test diff rate
     assert m.diff_rate(0.0) == 0.0
 
+    # Test mean and std
+    assert m.mean() == 0.5
+    assert m.mean(loc=1, scale=2) == 2
+    assert m.std() == stats.uniform().std()
+
     # Test making models with new defaults
     m2 = m(rate=50)
     assert m2 != m

@@ -347,7 +347,10 @@ class Model:
         self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
     ) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        return self(data=data, cut=cut)._diff_rate(params)
+        self = self(data=data, cut=cut)
+        if self.data is None:
+            raise ValueError("Provide data")
+        return self._diff_rate(params)
 
     def _diff_rate(self, params: dict):
         if not self._has_redefined("_pdf"):
@@ -364,7 +367,10 @@ class Model:
         self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
     ) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        return self(data=data, cut=cut)._pdf(params)
+        self = self(data=data, cut=cut)
+        if self.data is None:
+            raise ValueError("Provide data")
+        return self._pdf(params)
 
     def _pdf(self, params: dict):
         if not self._has_redefined("_diff_rate"):
@@ -381,7 +387,10 @@ class Model:
         self, data=NotChanged, params: dict = None, *, cut=cut, **kwargs
     ) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        return self(data=data, cut=cut)._cdf(params)
+        self = self(data=data, cut=cut)
+        if self.data is None:
+            raise ValueError("Provide data")
+        return self._cdf(params)
 
     def _cdf(self, params: dict):
         raise NotImplementedError
@@ -398,6 +407,27 @@ class Model:
 
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name] * self._cut_efficiency(params)
+
+    def mean(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+        params = self.validate_params(params, **kwargs)
+        return self(cut=cut)._mean(params)
+
+    def _mean(self, params: dict):
+        return NotImplementedError
+
+    def var(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+        params = self.validate_params(params, **kwargs)
+        return self(cut=cut)._var(params)
+
+    def _var(self, params: dict):
+        return self._std(params)**2
+
+    def std(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+        params = self.validate_params(params, **kwargs)
+        return self(cut=cut)._std(params)
+
+    def _std(self, params: dict):
+        return NotImplementedError
 
     def cut_efficiency(self, params: dict = None, cut=NotChanged, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)

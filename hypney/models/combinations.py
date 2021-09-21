@@ -85,17 +85,18 @@ class Mixture(AssociativeCombination):
         self.models = tuple([m(data=self.data) for m in self.models])
         super()._init_data()
 
-    def _rvs(self, size: int, params: dict) -> ep.types.NativeTensor:
+    def _rvs(self, size: int, params: dict) -> np.ndarray:
         n_from = np.random.multinomial(size, self._f_per_model(params))
-        return ep.concatenate(
+        return np.concatenate(
             [
-                ep.astensor(m._rvs(size=_n, params=ps))
+                m._rvs(size=_n, params=ps)
                 for _n, (m, ps) in zip(n_from, self._iter_models_params(params))
             ]
         )
 
-    def _rate(self, params: dict) -> ep.TensorType:
-        return sum(self._rate_per_model(params))
+    ##
+    # Methods using data
+    ##
 
     def _pdf(self, params: dict) -> ep.TensorType:
         return hypney.utils.eagerpy.average_axis0(
@@ -125,11 +126,41 @@ class Mixture(AssociativeCombination):
         )
 
     ##
+    # Methods not using data
+    ##
+
+    def _rate(self, params: dict) -> ep.TensorType:
+        return sum(self._rate_per_model(params))
+
+    def _mean(self, params: dict) -> ep.TensorType:
+        # Average of the means
+        means = self._mean_per_model(params)
+        return sum([
+            x * w
+            for x, w in zip(means, self._f_per_model(params))])
+
+    def _std(self, params: dict) -> ep.TensorType:
+        means = self._mean_per_model(params)
+        s2s = self._var_per_model(params)
+        ps = self._f_per_model(params)
+        # See e.g. https://stats.stackexchange.com/a/16609
+        var = (
+            sum([p * (s2 + m**2) for p, m, s2 in zip(ps, means, s2s)])
+            - sum([p * m for p, m in zip(ps, means)])**2)
+        return var**0.5
+
+    ##
     # Helpers
     ##
 
     def _rate_per_model(self, params: dict) -> ep.TensorType:
         return [m._rate(ps) for m, ps in self._iter_models_params(params)]
+
+    def _mean_per_model(self, params: dict) -> ep.TensorType:
+        return [m._mean(ps) for m, ps in self._iter_models_params(params)]
+
+    def _var_per_model(self, params: dict) -> ep.TensorType:
+        return [m._var(ps) for m, ps in self._iter_models_params(params)]
 
     def _f_per_model(self, params):
         mus = self._rate_per_model(params)
@@ -166,10 +197,10 @@ class TensorProduct(AssociativeCombination):
         self.models = tuple([m(cut=c) for m, c in zip(self.models, _cut_list)])
         super()._init_cut()
 
-    def _rvs(self, size: int, params: dict) -> ep.TensorType:
-        return ep.concatenate(
+    def _rvs(self, size: int, params: dict) -> np.ndarray:
+        return np.concatenate(
             [
-                ep.astensor(m._rvs(size=size, params=ps))
+                m._rvs(size=size, params=ps)
                 for m, ps in self._iter_models_params(params)
             ],
             axis=-1,

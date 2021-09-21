@@ -81,6 +81,8 @@ class ScipyUnivariate(hypney.Model):
         self._dists[modname] = result
         return result
 
+    # Methods using data
+
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
         return self.scipy_dist.rvs(size=size, **self._dist_params(params))[:, None]
 
@@ -93,6 +95,14 @@ class ScipyUnivariate(hypney.Model):
         return ep.astensor(
             self.dist().cdf(self.data[:, 0].raw, **self._dist_params(params))
         )
+
+    # Methods not using data
+
+    def _mean(self, params):
+        return self.dist().mean(**self._dist_params(params))
+
+    def _std(self, params):
+        return self.dist().std(**self._dist_params(params))
 
 
 # Create classes for all continuous distributions
@@ -241,6 +251,14 @@ class TorchDistributionWrapper:
         params, x0, x_scale = self._patch_params(params)
         return self.dist(**params).cdf((data - x0) / x_scale)
 
+    # TODO: test these!
+
+    def mean(self, **params):
+        return self.dist(**params).mean
+
+    def std(self, **params):
+        return self.dist(**params).stddev
+
 
 class TFPDistributionWrapper(TorchDistributionWrapper):
     @staticmethod
@@ -258,3 +276,11 @@ class TFPDistributionWrapper(TorchDistributionWrapper):
     def pdf(self, data, **params):
         params, x0, x_scale = self._patch_params(params, data)
         return self.dist(**params).prob((data - x0) / x_scale) / x_scale
+
+    # TODO: test these!
+
+    def mean(self, **params):
+        return self.dist(**params).mean()
+
+    def std(self, **params):
+        return self.dist(**params).stddev()

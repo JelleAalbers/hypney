@@ -32,5 +32,7 @@ def test_negative_data():
 def test_standardize_model():
     m = hypney.models.Norm(loc=42, scale=12)
     m_std = TransformedModel(m, data_shift=42, data_scale=12)
-    assert m_std.cdf(1.3) == stats.norm.cdf(1.3)
     assert m_std.pdf(1.3) == stats.norm.pdf(1.3)
+    assert m_std.cdf(1.3) == stats.norm.cdf(1.3)
+    assert m_std.mean() == 0.
+    assert m_std.std() == 1.
