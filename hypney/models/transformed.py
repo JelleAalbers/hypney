@@ -1,5 +1,7 @@
 import hypney
 
+import eagerpy as ep
+
 export, __all__ = hypney.exporter()
 
 
@@ -11,26 +13,29 @@ class TransformedModel(hypney.Model):
      - orig_model: original model taking transformed parameters
      - transform_params: function mapping dict of params the new model takes
         to dict of params the old model takes
-     - transform_data: function mapping data the new model takes
-        to data the old model takes
+     - data_shift: constant to add to scaled data
+     - data_scale: constant to multiply data by
     """
 
     # ... maybe we should integrate _transform_params and _transform_data in the base model instead?
     # Or would that lead to another layer wrapping pdf -> _pdf -> __pdf?
 
     _orig_model: hypney.Model
+    _data_shift = 0.0
+    _data_scale = 1.0
 
     def _transform_params(self, params: dict):
         return params
 
     def _transform_data(self):
-        return self.data
+        result = self.data * self._data_scale + self._data_shift
+        return result
 
     def _reverse_transform_data(self, orig_data):
-        return orig_data
+        return (orig_data - self._data_shift) / self._data_scale
 
     def _transform_data_jac_det(self, params, orig_params):
-        return 1.0
+        return abs(self._data_scale)
 
     ##
     # Initialization
@@ -40,14 +45,17 @@ class TransformedModel(hypney.Model):
         self,
         orig_model=hypney.NotChanged,
         *args,
-        transform_data=hypney.NotChanged,
+        data_shift=hypney.NotChanged,
+        data_scale=hypney.NotChanged,
         transform_params=hypney.NotChanged,
         **kwargs
     ):
         if transform_params is not hypney.NotChanged:
             self._transform_params = transform_params
-        if transform_data is not hypney.NotChanged:
-            self._transform_data = transform_data
+        if data_shift is not hypney.NotChanged:
+            self._data_shift = data_shift
+        if data_scale is not hypney.NotChanged:
+            self._data_scale = data_scale
         if orig_model is not hypney.NotChanged:
             # No need to make a copy now; any attempted state change
             # (set data, cut, change defaults...) will trigger that
@@ -70,22 +78,12 @@ class TransformedModel(hypney.Model):
     # Simulation
     ##
 
-    def _check_reverse_transform(self):
-        if self._has_redefined(
-            "_transform_data", from_base=TransformedModel
-        ) and not self._has_redefined(
-            "_reverse_transform_data", from_base=TransformedModel
-        ):
-            raise NotImplementedError("Missing reverse transformation")
-
     def _simulate(self, params):
-        self._check_reverse_transform()
         return self._reverse_transform_data(
             self._orig_model._simulate(self._transform_params(params))
         )
 
     def _rvs(self, size: int, params: dict):
-        self._check_reverse_transform()
         return self._reverse_transform_data(
             self._orig_model._rvs(size=size, params=self._transform_params(params))
         )
@@ -102,27 +100,17 @@ class TransformedModel(hypney.Model):
         assert not self._has_redefined("_transform_data")
         return super()._apply_cut()
 
-    def _check_transform_data_jac_det(self):
-        if self._has_redefined(
-            "_transform_data", from_base=TransformedModel
-        ) and not self._has_redefined(
-            "_transform_data_jac_det", from_base=TransformedModel
-        ):
-            raise NotImplementedError("Jacobian determinant missing")
-
     def _pdf(self, params):
-        self._check_transform_data_jac_det()
         orig_params = self._transform_params(params)
         return self._orig_model._pdf(orig_params) * self._transform_data_jac_det(
             params, orig_params
         )
 
     def _cdf(self, params):
-        if self._has_redefined("_transform_data", from_base=TransformedModel):
-            raise NotImplementedError(
-                "Don't know how to define CDF for generic transformation"
-            )
-        return self._orig_model._cdf(self._transform_params(params))
+        result = self._orig_model._cdf(self._transform_params(params))
+        if self._data_scale < 0:
+            result = 1 - result
+        return result
 
     ##
     # Methods not using data
@@ -137,15 +125,4 @@ class TransformedModel(hypney.Model):
 
 @export
 class NegativeData(TransformedModel):
-    def _transform_data(self):
-        return -self.data
-
-    def _reverse_transform_data(self):
-        return -self.data
-
-    def _transform_data_jac_det(self, params, orig_params):
-        return 1
-
-    def _cdf(self, params):
-        assert len(self.observables) == 1
-        return 1 - self._orig_model._cdf(params)
+    _data_scale = -1

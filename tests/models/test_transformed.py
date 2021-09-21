@@ -1,17 +1,8 @@
+from hypney.models.transformed import TransformedModel
 import numpy as np
+from scipy import stats
 
 import hypney
-
-
-def test_negative_data():
-
-    m = hypney.models.Uniform()
-    m_flip = hypney.models.NegativeData(m)
-
-    assert m_flip.pdf(data=-0.3) == m.pdf(data=0.3)
-    assert m_flip.diff_rate(data=-0.3) == m.pdf(data=0.3)
-    assert m_flip.rate() == m.rate()
-    assert m_flip.cdf(data=-0.3) == 1 - m.cdf(data=0.3)
 
 
 def test_filter_params():
@@ -25,3 +16,21 @@ def test_filter_params():
     fix = dict(loc=3, scale=2)
     m2 = m.fix(fix)
     np.testing.assert_array_equal(m2.pdf(data=data), m.pdf(params=fix, data=data))
+
+
+def test_negative_data():
+
+    m = hypney.models.Uniform()
+    m_flip = hypney.models.NegativeData(m)
+
+    assert m_flip.pdf(data=-0.3) == m.pdf(data=0.3)
+    assert m_flip.diff_rate(data=-0.3) == m.pdf(data=0.3)
+    assert m_flip.rate() == m.rate()
+    assert m_flip.cdf(data=-0.3) == 1 - m.cdf(data=0.3)
+
+
+def test_standardize_model():
+    m = hypney.models.Norm(loc=42, scale=12)
+    m_std = TransformedModel(m, data_shift=42, data_scale=12)
+    assert m_std.cdf(1.3) == stats.norm.cdf(1.3)
+    assert m_std.pdf(1.3) == stats.norm.pdf(1.3)
