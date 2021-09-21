@@ -76,14 +76,22 @@ class Statistic:
     def _compute(self, params):
         raise NotImplementedError
 
-    def rvs(self, size=1, params=None, **kwargs) -> np.ndarray:
+    def rvs(self, size=1, params=None, transform=np.asarray, **kwargs) -> np.ndarray:
         """Return statistic evaluated on simulated data,
-        generated from model with params"""
+        generated from model with params
+
+        Args:
+         - size: number of toys to draw
+         - params, **kwargs: parameters at which to simulate toys
+         - transform: run numpy data through this function before passing
+            it to statistic. Useful to convert to an autograd library,
+            e.g. torch.from_numpy / tf.convert_to_tensor.
+        """
         params = self.model.validate_params(params, **kwargs)
         results = np.zeros(size)
         for i in range(size):
-            sim_data = self.model._simulate(params=params)
-            results[i] = self(data=sim_data, params=params).numpy().item()
+            sim_data = transform(self.model._simulate(params=params))
+            results[i] = self.compute(data=sim_data, params=params)
         return results
 
 
@@ -101,7 +109,7 @@ class IndependentStatistic(Statistic):
         self._result = self._compute()
         super()._init_data()
 
-    def __call__(self, params: dict = None, data=NotChanged):
+    def compute(self, params: dict = None, data=NotChanged):
         self = self.set(data)
         if self.data is None:
             raise ValueError("Must provide data")

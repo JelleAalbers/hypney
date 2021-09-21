@@ -28,7 +28,8 @@ class Interpolation(hypney.Model):
         **kwargs
     ):
         if isinstance(param_specs, dict):
-            # Shorthand parameter spec, only anchors given.
+            # Shorthand parameter spec just for this model,
+            # only anchors given.
             param_specs = tuple(
                 [
                     hypney.ParameterSpec(

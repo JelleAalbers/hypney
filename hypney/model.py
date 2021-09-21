@@ -47,7 +47,7 @@ class Model:
         self,
         name="",
         data=None,
-        params=NotChanged,   # Really defaults...
+        params=NotChanged,  # Really defaults...
         param_specs=NotChanged,
         observables=NotChanged,
         cut=NotChanged,
@@ -83,7 +83,9 @@ class Model:
         """Initialize self.data (either from construction or data change)"""
         pass
 
-    def _validate_and_set_defaults(self, new_defaults: dict = NotChanged, **kwargs: dict):
+    def _validate_and_set_defaults(
+        self, new_defaults: dict = NotChanged, **kwargs: dict
+    ):
         if new_defaults == NotChanged:
             new_defaults = dict()
         new_defaults = self.validate_params(new_defaults, **kwargs)

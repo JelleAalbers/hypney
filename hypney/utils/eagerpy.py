@@ -40,6 +40,16 @@ def ensure_raw(x):
 
 
 @export
+def ensure_numpy_float(x):
+    if isinstance(x, ep.Tensor):
+        x = x.numpy()
+    if isinstance(x, np.ndarray):
+        assert x.shape == 0
+        return x.item()
+    return x
+
+
+@export
 def np64(x):
     return x.numpy().astype(np.float64)
 
