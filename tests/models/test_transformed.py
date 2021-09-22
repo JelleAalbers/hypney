@@ -29,9 +29,9 @@ def test_negative_data():
     assert m_flip.cdf(data=-0.3) == 1 - m.cdf(data=0.3)
 
 
-def test_standardize_model():
+def test_normalize_data():
     m = hypney.models.Norm(loc=42, scale=12)
-    m_std = TransformedModel(m, data_shift=42, data_scale=12)
+    m_std = hypney.models.NormalizedData(m)
     assert m_std.pdf(1.3) == stats.norm.pdf(1.3)
     assert m_std.cdf(1.3) == stats.norm.cdf(1.3)
     assert m_std.mean() == 0.

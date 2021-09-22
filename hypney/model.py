@@ -372,13 +372,14 @@ class Model:
             raise ValueError("Provide data")
         return self._pdf(params)
 
+    # TODO: test _has_redefined error is raised
     def _pdf(self, params: dict):
         if not self._has_redefined("_diff_rate"):
             raise NotImplementedError(
                 "Can't compute pdf of a Model implementing "
                 "neither _pdf nor _diff_rate"
             )
-        return self._diff_rate(self.data, params) / self._rate(params)
+        return self._diff_rate(params) / self._rate(params)
 
     def cdf(self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs):
         return self.cdf_(data=data, params=params, cut=cut, **kwargs).raw

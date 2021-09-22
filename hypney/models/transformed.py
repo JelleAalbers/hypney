@@ -134,3 +134,12 @@ class TransformedModel(hypney.Model):
 @export
 class NegativeData(TransformedModel):
     _data_scale = -1
+
+
+@export
+class NormalizedData(TransformedModel):
+
+    def __init__(self, orig_model=hypney.NotChanged, *args, **kwargs):
+        kwargs.setdefault('data_scale', orig_model.std())
+        kwargs.setdefault('data_shift', orig_model.mean())
+        return super().__init__(orig_model=orig_model, *args, **kwargs)
