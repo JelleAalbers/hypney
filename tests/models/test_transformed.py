@@ -34,5 +34,5 @@ def test_normalize_data():
     m_std = hypney.models.NormalizedData(m)
     assert m_std.pdf(1.3) == stats.norm.pdf(1.3)
     assert m_std.cdf(1.3) == stats.norm.cdf(1.3)
-    assert m_std.mean() == 0.
-    assert m_std.std() == 1.
+    assert m_std.mean() == 0.0
+    assert m_std.std() == 1.0

@@ -20,7 +20,7 @@ class DiracDelta(hypney.Model):
         return np.ones((size, 1)) * params["loc"]
 
     def _mean(self, params):
-        return params['loc']
+        return params["loc"]
 
     def _std(self, params):
-        return 0.
+        return 0.0

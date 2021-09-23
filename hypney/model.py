@@ -421,7 +421,7 @@ class Model:
         return self(cut=cut)._var(params)
 
     def _var(self, params: dict):
-        return self._std(params)**2
+        return self._std(params) ** 2
 
     def std(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)

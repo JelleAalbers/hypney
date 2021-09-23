@@ -135,9 +135,7 @@ class Mixture(AssociativeCombination):
     def _mean(self, params: dict) -> ep.TensorType:
         # Average of the means
         means = self._mean_per_model(params)
-        return sum([
-            x * w
-            for x, w in zip(means, self._f_per_model(params))])
+        return sum([x * w for x, w in zip(means, self._f_per_model(params))])
 
     def _std(self, params: dict) -> ep.TensorType:
         means = self._mean_per_model(params)
@@ -145,9 +143,10 @@ class Mixture(AssociativeCombination):
         ps = self._f_per_model(params)
         # See e.g. https://stats.stackexchange.com/a/16609
         var = (
-            sum([p * (s2 + m**2) for p, m, s2 in zip(ps, means, s2s)])
-            - sum([p * m for p, m in zip(ps, means)])**2)
-        return var**0.5
+            sum([p * (s2 + m ** 2) for p, m, s2 in zip(ps, means, s2s)])
+            - sum([p * m for p, m in zip(ps, means)]) ** 2
+        )
+        return var ** 0.5
 
     ##
     # Helpers

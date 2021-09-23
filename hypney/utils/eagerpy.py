@@ -61,7 +61,6 @@ def cos(x):
     return ep.astensor(tensorlib(x).cos(x.raw))
 
 
-
 @export
 def np64(x):
     return x.numpy().astype(np.float64)
