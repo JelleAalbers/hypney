@@ -1,5 +1,6 @@
 from functools import partial, partialmethod
 import itertools
+import numpy as np
 import typing as ty
 
 import eagerpy as ep
@@ -15,8 +16,8 @@ class Interpolation(hypney.Model):
     The pdf, cdf, rate, etc. are interpolators, evaluated at anchor points
     """
 
-    data_methods_to_interpolate = "_pdf _cdf _diff_rate".split()
-    other_methods_to_interpolate = "_rate ".split()
+    data_methods_to_interpolate = "pdf cdf diff_rate".split()
+    other_methods_to_interpolate = "rate mean std".split()
     anchor_models: ty.Dict[tuple, hypney.Model]
 
     def __init__(
@@ -25,8 +26,10 @@ class Interpolation(hypney.Model):
         model_builder: callable,
         param_specs: ty.Union[tuple, dict],
         *args,
+        standardize=False,
         **kwargs
     ):
+        self.standardize = standardize
         if isinstance(param_specs, dict):
             # Shorthand parameter spec just for this model,
             # only anchors given.
@@ -54,6 +57,12 @@ class Interpolation(hypney.Model):
         }
         self._some_model = next(iter(self.anchor_models.values()))
 
+        if self.standardize:
+            # Build models taking standardized data
+            self.rescaled_anchor_models = {
+                anchor: hypney.models.NormalizedData(model)
+                for anchor, model in self.anchor_models.items()}
+
         self.interp_maker = hypney.utils.grid_interpolator.GridInterpolator(
             anchor_values
         )
@@ -69,6 +78,12 @@ class Interpolation(hypney.Model):
             ]
         )
 
+        # For methods that don't take data, we can always build the
+        # interpolators in the init
+        for method_name in self.other_methods_to_interpolate:
+            if hasattr(self._some_model, method_name):
+                self._build_interpolator(method_name)
+
         # Can't call this earlier; may trigger interpolator building
         # if data is given on init
         super().__init__(
@@ -77,12 +92,6 @@ class Interpolation(hypney.Model):
             observables=self._some_model.observables,
             **kwargs
         )
-
-        # For methods that don't take data, we can build the interpolators
-        # right now
-        for method_name in self.other_methods_to_interpolate:
-            if hasattr(self._some_model, method_name):
-                self._build_interpolator(method_name)
 
     def _init_data(self):
         # Update anchor models to ones with appropriate data & cut
@@ -94,7 +103,7 @@ class Interpolation(hypney.Model):
         # Build interpolators for methods that take data (i.e. use self.data)
         for method_name in self.data_methods_to_interpolate:
             # Only build interpolator if method was redefined from Model
-            if self._has_redefined(method_name):
+            if self._has_redefined('_' + method_name):
                 self._build_interpolator(method_name)
 
         super()._init_data()
@@ -107,15 +116,9 @@ class Interpolation(hypney.Model):
         super()._init_cut()
 
     def _build_interpolator(self, itp_name: str):
-        # Make sure to call non-underscored methods of the anchor models,
-        # so they fill in their default params.
-        # (especially convenient for non-interpolated params. Otherwise we'd
-        #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
-        method_name = itp_name[1:] if itp_name.startswith("_") else itp_name
-
         self._interpolators[itp_name] = self.interp_maker.make_interpolator(
-            # method_name=method_name does not work! Confusing...
-            partial(self._call_anchor_method, method_name)
+            # itp_name=itp_name does not work! Confusing...
+            partial(self._call_anchor_method, itp_name)
         )
 
     def _call_interpolator(
@@ -125,10 +128,13 @@ class Interpolation(hypney.Model):
             self = self(cut=cut)
         if not itp_name in self._interpolators:
             # No interpolator was built (e.g. diff_rate when pdf and rate known)
-            return getattr(super(), itp_name)(params)
+            return getattr(super(), '_' + itp_name)(params)
         params = self.validate_params(params)
-        anchor_tuple = self._params_to_anchor_tuple(params)
-        result = self._interpolators[itp_name]([anchor_tuple])[0]
+        anchor_tuple = hypney.utils.eagerpy.sequence_to_tensor(
+            self._params_to_anchor_tuple(params),
+            match_type=self.data if self.data is not None else np.zeros(0))
+
+        result = self._interpolators[itp_name](anchor_tuple[None,:])[0]
         if itp_name in self.data_methods_to_interpolate:
             # Vector result
             return ep.astensor(result)
@@ -141,7 +147,15 @@ class Interpolation(hypney.Model):
 
     def _call_anchor_method(self, method_name, param_tuple):
         """Call Model.method_name for anchor model at params"""
-        return getattr(self.anchor_models[param_tuple], method_name)()
+        anchor_models = self.rescaled_anchor_models if self.standardize else self.anchor_models
+        # Make sure to call non-underscored methods of the anchor models,
+        # so they fill in their default params.
+        # (especially convenient for non-interpolated params. Otherwise we'd
+        #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
+
+        # We do have to call method_name_, since we want to preserve eagerpy
+        method_name = method_name + ('_' if method_name in self.data_methods_to_interpolate else '')
+        return getattr(anchor_models[param_tuple], method_name)()
 
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
         anchor = self._params_to_anchor_tuple(params)
@@ -165,6 +179,8 @@ for method_name in (
 ):
     setattr(
         Interpolation,
-        method_name,
+        # See command in _call_anchor_method about underscore
+        '_' + method_name,
         partialmethod(Interpolation._call_interpolator, method_name),
     )
+del method_name

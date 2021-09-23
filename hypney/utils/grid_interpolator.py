@@ -4,7 +4,6 @@ adapted from https://github.com/JelleAalbers/blueice/blob/master/blueice/pdf_mor
 """
 import eagerpy as ep
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
 
 import hypney
 
@@ -48,12 +47,24 @@ class GridInterpolator:
             # Compute f at this point
             result = f(inputs_at_anchors[tuple(_zs)])
             if isinstance(result, ep.Tensor):
-                result = result.raw
+                extra_dims = result.shape
+                # TODO: We're still using numpy to build the values array
+                # That shouldn't really be necessary; there may be some clever
+                # scatter trick
+                result = result.numpy()
+            else:
+                try:
+                    len(result)
+                except Exception:
+                    # We got a scalar output
+                    extra_dims = tuple()
+                else:
+                    # Someone isn't passing the right stuff
+                    raise ValueError(f"Got non-eagerpy output {type(result)}")
 
             if anchor_scores is None:
                 # Now that we have the first result, we can allocate
                 # the array needed to hold all results
-                extra_dims = np.asarray(result).shape
                 anchor_scores = np.zeros(
                     list(self.anchor_z_grid.shape)[:-1] + list(extra_dims)
                 )
@@ -62,7 +73,9 @@ class GridInterpolator:
                 tuple(anchor_grid_index + [slice(None)] * len(extra_dims))
             ] = result
 
-        return RegularGridInterpolator(self.anchor_z_arrays, anchor_scores)
+        return hypney.utils.RegularGridInterpolator(
+            [ep.astensor(x) for x in self.anchor_z_arrays],
+            ep.astensor(anchor_scores))
 
     def _anchor_grid_iterator(self):
         """Iterates over the anchor grid, yielding index, z-values"""

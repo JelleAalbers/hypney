@@ -14,13 +14,15 @@ def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
         return x
     if not isinstance(match_type, ep.Tensor):
         match_type = ep.astensor(match_type)
+    if isinstance(x, ep.Tensor):
+        raise ValueError("Passed tensor of incompatible type")
 
     # Check, why is this not included in eagerpy?
     # Maybe it is and I haven't found it?
     # e.g. ep.JAXTensor([1,2,3]) gives something pathological
     # (list wrapped in a JAXTensor, should be wrapped jax array)
     if isinstance(match_type, ep.NumPyTensor):
-        return ep.astensor(np.asarray(x))
+        return ep.numpy.asarray(x)
     # ep.jax etc. will automatically wrap return values as eagerpy tensors
     if isinstance(match_type, ep.JAXTensor):
         return ep.jax.numpy.asarray(x, dtype=match_type.dtype)
@@ -47,6 +49,17 @@ def ensure_numpy_float(x):
         assert x.shape == 0
         return x.item()
     return x
+
+
+@export
+def sin(x):
+    return ep.astensor(tensorlib(x).sin(x.raw))
+
+
+@export
+def cos(x):
+    return ep.astensor(tensorlib(x).cos(x.raw))
+
 
 
 @export
@@ -80,3 +93,17 @@ def tensorlib(x: ep.TensorType):
     elif isinstance(x, ep.JAXTensor):
         return ep.jax
     raise ValueError(f"Unknown tensor type {type(x)}")
+
+
+@export
+def bucketize(x, p):
+    # TODO check these are really equivalent
+    if isinstance(x, ep.NumPyTensor):
+        return ep.numpy.searchsorted(p, x)
+    elif isinstance(x, ep.TensorFlowTensor):
+        return ep.tf.bucketize(x, p)
+    elif isinstance(x, ep.PyTorchTensor):
+        return ep.torch.bucketize(x, p)
+    elif isinstance(x, ep.JAXTensor):
+        return ep.jax.numpy.searchsorted(p, x)
+    raise TypeError(f"Unknown tensor type {x}")
