@@ -61,9 +61,10 @@ class Interpolation(hypney.Model):
             # Build models taking standardized data
             self.rescaled_anchor_models = {
                 anchor: hypney.models.NormalizedData(model)
-                for anchor, model in self.anchor_models.items()}
+                for anchor, model in self.anchor_models.items()
+            }
 
-        self.interp_maker = hypney.utils.grid_interpolator.GridInterpolator(
+        self.interp_maker = hypney.utils.interpolation.InterpolatorBuilder(
             anchor_values
         )
         self._interpolators = dict()
@@ -103,7 +104,7 @@ class Interpolation(hypney.Model):
         # Build interpolators for methods that take data (i.e. use self.data)
         for method_name in self.data_methods_to_interpolate:
             # Only build interpolator if method was redefined from Model
-            if self._has_redefined('_' + method_name):
+            if self._has_redefined("_" + method_name):
                 self._build_interpolator(method_name)
 
         super()._init_data()
@@ -128,13 +129,14 @@ class Interpolation(hypney.Model):
             self = self(cut=cut)
         if not itp_name in self._interpolators:
             # No interpolator was built (e.g. diff_rate when pdf and rate known)
-            return getattr(super(), '_' + itp_name)(params)
+            return getattr(super(), "_" + itp_name)(params)
         params = self.validate_params(params)
         anchor_tuple = hypney.utils.eagerpy.sequence_to_tensor(
             self._params_to_anchor_tuple(params),
-            match_type=self.data if self.data is not None else np.zeros(0))
+            match_type=self.data if self.data is not None else np.zeros(0),
+        )
 
-        result = self._interpolators[itp_name](anchor_tuple[None,:])[0]
+        result = self._interpolators[itp_name](anchor_tuple[None, :])[0]
         if itp_name in self.data_methods_to_interpolate:
             # Vector result
             return ep.astensor(result)
@@ -147,14 +149,18 @@ class Interpolation(hypney.Model):
 
     def _call_anchor_method(self, method_name, param_tuple):
         """Call Model.method_name for anchor model at params"""
-        anchor_models = self.rescaled_anchor_models if self.standardize else self.anchor_models
+        anchor_models = (
+            self.rescaled_anchor_models if self.standardize else self.anchor_models
+        )
         # Make sure to call non-underscored methods of the anchor models,
         # so they fill in their default params.
         # (especially convenient for non-interpolated params. Otherwise we'd
         #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
 
         # We do have to call method_name_, since we want to preserve eagerpy
-        method_name = method_name + ('_' if method_name in self.data_methods_to_interpolate else '')
+        method_name = method_name + (
+            "_" if method_name in self.data_methods_to_interpolate else ""
+        )
         return getattr(anchor_models[param_tuple], method_name)()
 
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
@@ -180,7 +186,7 @@ for method_name in (
     setattr(
         Interpolation,
         # See command in _call_anchor_method about underscore
-        '_' + method_name,
+        "_" + method_name,
         partialmethod(Interpolation._call_interpolator, method_name),
     )
 del method_name
