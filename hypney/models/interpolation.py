@@ -79,11 +79,10 @@ class Interpolation(hypney.Model):
             ]
         )
 
-        # For methods that don't take data, we can always build the
-        # interpolators in the init
+        # Build interpolators for methods that don't take data
+        # (we will change tensorlib type as needed in init_data)
         for method_name in self.other_methods_to_interpolate:
-            if hasattr(self._some_model, method_name):
-                self._build_interpolator(method_name)
+            self._build_interpolator(method_name, tensorlib=ep.numpy)
 
         # Can't call this earlier; may trigger interpolator building
         # if data is given on init
@@ -102,10 +101,15 @@ class Interpolation(hypney.Model):
         }
 
         # Build interpolators for methods that take data (i.e. use self.data)
+        tensorlib = hypney.utils.eagerpy.tensorlib(self.data)
         for method_name in self.data_methods_to_interpolate:
             # Only build interpolator if method was redefined from Model
             if self._has_redefined("_" + method_name):
-                self._build_interpolator(method_name)
+                self._build_interpolator(method_name, tensorlib=tensorlib)
+
+        # TODO: change tensorlib of non-data-method interpolat non-data interpolators
+        for method_name in self.other_methods_to_interpolate:
+            self._build_interpolator(method_name, tensorlib=tensorlib)
 
         super()._init_data()
 
@@ -116,10 +120,11 @@ class Interpolation(hypney.Model):
             self._init_data()
         super()._init_cut()
 
-    def _build_interpolator(self, itp_name: str):
+    def _build_interpolator(self, itp_name: str, tensorlib):
         self._interpolators[itp_name] = self.interp_maker.make_interpolator(
             # itp_name=itp_name does not work! Confusing...
-            partial(self._call_anchor_method, itp_name)
+            partial(self._call_anchor_method, itp_name),
+            tensorlib=tensorlib
         )
 
     def _call_interpolator(

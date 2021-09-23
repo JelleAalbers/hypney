@@ -84,7 +84,7 @@ def split(x, *args, **kwargs):
 def tensorlib(x: ep.TensorType):
     # This looks like
     if isinstance(x, ep.NumPyTensor):
-        return np
+        return ep.numpy
     elif isinstance(x, ep.PyTorchTensor):
         return ep.torch
     elif isinstance(x, ep.TensorFlowTensor):
