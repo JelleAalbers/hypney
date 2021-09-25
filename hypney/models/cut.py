@@ -10,27 +10,30 @@ export, __all__ = hypney.exporter()
 
 
 @export
+class NoCut:
+    """Instruction to not cut data"""
+
+    pass
+
+
+@export
 class CutModel(hypney.WrappedModel):
     """A model limiting observables to a rectangular region
 
     Args (beyond those of Model):
      - orig_model: original model taking transformed parameters
-     - cut: hypney.NoCut, or a tuple of (low, right) bounds for each observables
+     - cut: NoCut, or a tuple of (low, right) bounds for each observables
         None can be put in place for +-inf
     """
 
-    cut = hypney.NoCut
+    cut = NoCut
     _passes_cut: ep.Tensor
 
     def __init__(
-        self,
-        orig_model: hypney.Model = hypney.NotChanged,
-        cut=hypney.NoCut,
-        *args,
-        **kwargs
+        self, orig_model: hypney.Model = hypney.NotChanged, cut=NoCut, *args, **kwargs
     ):
         self.cut = self.validate_cut(cut)
-        if cut != hypney.NoCut:
+        if cut != NoCut:
             kwargs.setdefault(
                 "observables",
                 tuple(
@@ -45,7 +48,7 @@ class CutModel(hypney.WrappedModel):
     def _init_data(self):
         # Compute which events pass cut
         passed = 1 + 0 * self.data[:, 0]
-        if self.cut == hypney.NoCut:
+        if self.cut == NoCut:
             return passed
         for dim_i, (l, r) in enumerate(self.cut):
             passed *= (l <= self.data[:, dim_i]) * (self.data[:, dim_i] < r)
@@ -58,7 +61,7 @@ class CutModel(hypney.WrappedModel):
     def validate_cut(self, cut):
         """Return a valid cut, i.e. NoCut or tuple of (l, r) tuples for each observable.
         """
-        if cut == hypney.NoCut:
+        if cut == NoCut:
             return cut
         if cut is None:
             raise ValueError("None is not a valid cut, use NoCut")
@@ -88,7 +91,7 @@ class CutModel(hypney.WrappedModel):
         return self._cut_efficiency(params).raw
 
     def _cut_efficiency(self, params: dict):
-        if self.cut is hypney.NoCut:
+        if self.cut is NoCut:
             return 1.0
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")

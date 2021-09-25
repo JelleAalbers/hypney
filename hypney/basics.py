@@ -42,7 +42,6 @@ DEFAULT_LOC_PARAM = ParameterSpec(name="loc", min=-float("inf"))
 DEFAULT_SCALE_PARAM = ParameterSpec(name="scale", min=1e-6, max=float("inf"), default=1)
 
 RATE_LOC_PARAMS = (DEFAULT_RATE_PARAM, DEFAULT_LOC_PARAM)
-
 RATE_LOC_SCALE_PARAMS = RATE_LOC_PARAMS + (DEFAULT_SCALE_PARAM,)
 
 
@@ -58,10 +57,3 @@ class Observable(ty.NamedTuple):
 
 
 DEFAULT_OBSERVABLE = Observable(name="x", min=-float("inf"), max=float("inf"))
-
-
-@export
-class NoCut:
-    """Instruction to not cut data"""
-
-    pass
