@@ -1,4 +1,3 @@
-from hypney.models.transformed import TransformedModel
 import numpy as np
 from scipy import stats
 

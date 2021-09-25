@@ -214,7 +214,7 @@ class Model:
 
     def _fix(self, fix):
         fix = self.validate_params(fix, set_defaults=False)
-        return hypney.models.TransformedModel(
+        return hypney.models.TransformParams(
             orig_model=self,
             param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
             transform_params=functools.partial(_merge_dicts, fix),

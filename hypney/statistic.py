@@ -18,7 +18,7 @@ class Statistic:
         self.model = model
 
         if dist is None and hasattr(self, "_build_dist"):
-            self.dist = hypney.models.TransformedModel(
+            self.dist = hypney.models.TransformParams(
                 self._build_dist(),
                 transform_params=self._dist_params,
                 param_specs=self.model.param_specs,
