@@ -81,7 +81,7 @@ class ScipyUnivariate(hypney.Model):
         self._dists[modname] = result
         return result
 
-    # Methods using data
+    # Methods using data / quantiles
 
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
         return self.scipy_dist.rvs(size=size, **self._dist_params(params))[:, None]
@@ -94,6 +94,11 @@ class ScipyUnivariate(hypney.Model):
     def _cdf(self, params: dict) -> np.ndarray:
         return ep.astensor(
             self.dist().cdf(self.data[:, 0].raw, **self._dist_params(params))
+        )
+
+    def _ppf(self, params: dict) -> np.ndarray:
+        return ep.astensor(
+            self.dist().ppf(self.quantiles.raw, **self._dist_params(params))
         )
 
     # Methods not using data
@@ -253,6 +258,11 @@ class TorchDistributionWrapper:
 
     # TODO: test these!
 
+    def ppf(self, quantiles, **params):
+        params, x0, x_scale = self._patch_params(params)
+        result = self.dist(**params).icdf(quantiles)
+        return result * x_scale + x0
+
     def mean(self, **params):
         return self.dist(**params).mean
 
@@ -278,6 +288,9 @@ class TFPDistributionWrapper(TorchDistributionWrapper):
         return self.dist(**params).prob((data - x0) / x_scale) / x_scale
 
     # TODO: test these!
+
+    def ppf(self, quantiles, **params):
+        return self.icdf(quantiles, **params)
 
     def mean(self, **params):
         return self.dist(**params).mean()

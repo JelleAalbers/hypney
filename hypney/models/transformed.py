@@ -89,7 +89,7 @@ class TransformedModel(hypney.Model):
         )
 
     ##
-    # Methods using data
+    # Methods using data / quantiles
     ##
 
     def _apply_cut(self):
@@ -111,6 +111,10 @@ class TransformedModel(hypney.Model):
         if self._data_scale < 0:
             result = 1 - result
         return result
+
+    def _ppf(self, params):
+        result = self._orig_model._ppf(self._transform_params(params))
+        return self._data_scale * result + self._data_shift
 
     ##
     # Methods not using data

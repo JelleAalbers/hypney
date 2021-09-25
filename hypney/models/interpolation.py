@@ -94,9 +94,10 @@ class Interpolation(hypney.Model):
         )
 
     def _init_data(self):
-        # Update anchor models to ones with appropriate data & cut
+        # Update anchor models to ones with appropriate data
+        # TODO: what about cut?
         self.anchor_models = {
-            anchor: model(data=self.data, cut=self.cut)
+            anchor: model(data=self.data)
             for anchor, model in self.anchor_models.items()
         }
 
@@ -107,11 +108,20 @@ class Interpolation(hypney.Model):
             if self._has_redefined("_" + method_name):
                 self._build_interpolator(method_name, tensorlib=tensorlib)
 
-        # TODO: change tensorlib of non-data-method interpolat non-data interpolators
+        # TODO: change tensorlib of non-data-method interpolate non-data interpolators
         for method_name in self.other_methods_to_interpolate:
             self._build_interpolator(method_name, tensorlib=tensorlib)
 
         super()._init_data()
+
+    def _init_quantiles(self):
+        self.anchor_models = {
+            anchor: model(quantiles=self.quantiles)
+            for anchor, model in self.anchor_models.items()
+        }
+        tensorlib = hypney.utils.eagerpy.tensorlib(self.quantiles)
+        if self._has_redefined("_ppf"):
+            self._build_interpolator("ppf", tensorlib=tensorlib)
 
     def _init_cut(self):
         if not isinstance(self.data, ep.NumPyTensor):
@@ -124,7 +134,7 @@ class Interpolation(hypney.Model):
         self._interpolators[itp_name] = self.interp_maker.make_interpolator(
             # itp_name=itp_name does not work! Confusing...
             partial(self._call_anchor_method, itp_name),
-            tensorlib=tensorlib
+            tensorlib=tensorlib,
         )
 
     def _call_interpolator(
@@ -142,7 +152,7 @@ class Interpolation(hypney.Model):
         )
 
         result = self._interpolators[itp_name](anchor_tuple[None, :])[0]
-        if itp_name in self.data_methods_to_interpolate:
+        if itp_name in self.data_methods_to_interpolate or itp_name == "ppf":
             # Vector result
             return ep.astensor(result)
         else:
@@ -162,10 +172,9 @@ class Interpolation(hypney.Model):
         # (especially convenient for non-interpolated params. Otherwise we'd
         #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
 
-        # We do have to call method_name_, since we want to preserve eagerpy
-        method_name = method_name + (
-            "_" if method_name in self.data_methods_to_interpolate else ""
-        )
+        # We do have to call method_name + _, since we want to preserve eagerpy
+        if method_name in self.data_methods_to_interpolate or method_name == "ppf":
+            method_name = method_name + "_"
         return getattr(anchor_models[param_tuple], method_name)()
 
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
@@ -187,6 +196,7 @@ class Interpolation(hypney.Model):
 for method_name in (
     Interpolation.data_methods_to_interpolate
     + Interpolation.other_methods_to_interpolate
+    + ["ppf",]
 ):
     setattr(
         Interpolation,

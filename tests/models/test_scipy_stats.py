@@ -29,8 +29,9 @@ def test_uniform():
     assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
     assert m.pdf(0) == 1.0
 
-    # Test cdf
+    # Test cdf and ppf
     np.testing.assert_array_equal(m.cdf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
+    np.testing.assert_array_equal(m.ppf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
 
     # Test diff rate
     assert m.diff_rate(0.0) == 0.0
@@ -89,6 +90,12 @@ def test_beta():
     assert len(data)
     assert data.min() < 0
     assert (data.max() - data.min()) > 1
+
+    params = dict(a=0.5, b=0.5, loc=-100, scale=10)
+    data = [-100, -93, -98, -34]
+    np.testing.assert_equal(m2.cdf(data), stats.beta(**params).cdf(data))
+    quantiles = [0.1, 0.8, 0.3, 0.2, 1, 0]
+    np.testing.assert_equal(m2.ppf(quantiles), stats.beta(**params).ppf(quantiles))
 
 
 def test_poisson():

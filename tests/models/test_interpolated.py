@@ -22,6 +22,13 @@ def test_interpolated():
     np.testing.assert_array_almost_equal(m2.pdf(params=dict(loc=0.2)), y)
     np.testing.assert_array_almost_equal(m2.diff_rate(params=dict(loc=0.2)), y * 1000.0)
 
+    # TODO: check Ppf is indeed no longer the inverse of the CDF
+    # if you just interpolate everything naively...
+    # np.testing.assert_array_almost_equal(
+    #     m2.ppf(m2.cdf(data=y, params=dict(loc=0.2))), y)
+    # np.testing.assert_array_almost_equal(
+    #     m2.cdf(m2.ppf(quantiles=y, params=dict(loc=0.2))), y)
+
     # Test two dimensions of anchors
     m2 = hypney.models.Interpolation(
         builder, param_specs=dict(loc=(-0.5, 0, 0.5), scale=(0.5, 1, 1.5)), data=x

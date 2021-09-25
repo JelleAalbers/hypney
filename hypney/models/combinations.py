@@ -95,7 +95,7 @@ class Mixture(AssociativeCombination):
         )
 
     ##
-    # Methods using data
+    # Methods using data / quantiles
     ##
 
     def _pdf(self, params: dict) -> ep.TensorType:
@@ -124,6 +124,9 @@ class Mixture(AssociativeCombination):
             ),
             axis=0,
         )
+
+    def _ppf(self, params: dict) -> ep.TensorType:
+        raise NotImplementedError("Have to look up how to do this")
 
     ##
     # Methods not using data
@@ -226,6 +229,9 @@ class TensorProduct(AssociativeCombination):
             ),
             axis=0,
         )
+
+    def _ppf(self, params: dict) -> ep.TensorType:
+        raise NotImplementedError("I think ppf isn't uniquely defined in >1 dim")
 
 
 @export

@@ -19,7 +19,8 @@ class Model:
     param_specs: ty.Tuple[hypney.ParameterSpec] = (hypney.DEFAULT_RATE_PARAM,)
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     cut: ty.Union[hypney.NoCut, tuple] = hypney.NoCut
-    data: np.ndarray = None
+    data: ep.Tensor = None
+    quantiles: ep.Tensor = None
 
     def param_spec_for(self, pname):
         for p in self.param_specs:
@@ -51,6 +52,7 @@ class Model:
         param_specs=NotChanged,
         observables=NotChanged,
         cut=NotChanged,
+        quantiles=None,
         **kwargs,
     ):
         self.name = name
@@ -65,6 +67,7 @@ class Model:
 
         self._validate_and_set_defaults(params, **kwargs)
         self._set_data(data)
+        self._set_quantiles(quantiles)
 
     def _set_data(self, data=hypney.NotChanged):
         if data is hypney.NotChanged:
@@ -83,6 +86,23 @@ class Model:
         """Initialize self.data (either from construction or data change)"""
         pass
 
+    def _set_quantiles(self, quantiles=hypney.NotChanged):
+        if quantiles is hypney.NotChanged:
+            return
+        if quantiles is None:
+            if self.quantiles is not None:
+                raise ValueError("Cannot reset quantiles to None")
+            else:
+                self.quantiles = None
+                return
+        quantiles = self.validate_quantiles(quantiles)
+        self.quantiles = quantiles
+        self._init_quantiles()
+
+    def _init_quantiles(self):
+        """Initialize self.quantiles (either from construction or data change)"""
+        pass
+
     def _validate_and_set_defaults(
         self, new_defaults: dict = NotChanged, **kwargs: dict
     ):
@@ -94,6 +114,8 @@ class Model:
         )
 
     def _set_cut(self, cut):
+        if cut is NotChanged:
+            return
         self.cut = self.validate_cut(cut)
         self._init_cut()
 
@@ -130,6 +152,7 @@ class Model:
         data=NotChanged,
         params=NotChanged,
         cut=NotChanged,
+        quantiles=NotChanged,
         fix=None,
         fix_except=None,
         **kwargs,
@@ -139,6 +162,7 @@ class Model:
             name is NotChanged
             and data is NotChanged
             and cut is NotChanged
+            and quantiles is NotChanged
             and not params
             and not kwargs
             and fix is None
@@ -149,10 +173,9 @@ class Model:
         if name is not NotChanged:
             new_self.name = name
         new_self._validate_and_set_defaults(params, **kwargs)
-        if data is not NotChanged:
-            new_self._set_data(data)
-        if cut is not NotChanged:
-            new_self._set_cut(cut)
+        new_self._set_data(data)
+        new_self._set_cut(cut)
+        new_self._set_quantiles(quantiles)
         if fix is not None:
             new_self = new_self.fix(fix)
             if fix_except is not None:
@@ -252,6 +275,27 @@ class Model:
             )
         return data
 
+    def validate_quantiles(self, quantiles) -> ep.TensorType:
+        """Return an (n_events) eagerpy tensor from quantiles
+        """
+        # TODO: much of this duplicates validate_data...
+        if quantiles is None:
+            raise ValueError("None is not valid as quantiles")
+        try:
+            len(quantiles)
+        except TypeError:
+            quantiles = [quantiles]
+        if isinstance(quantiles, (list, tuple)):
+            if self.data is None:
+                quantiles = np.asarray(quantiles)
+            else:
+                quantiles = hypney.utils.eagerpy.sequence_to_tensor(
+                    quantiles, match_type=self.data
+                )
+        assert 0 <= quantiles.min() < quantiles.max() <= 1
+        quantiles = ep.astensor(quantiles)
+        return quantiles
+
     def validate_cut(self, cut):
         """Return a valid cut, i.e. NoCut or tuple of (l, r) tuples for each observable.
         """
@@ -314,7 +358,7 @@ class Model:
         raise NotImplementedError
 
     ##
-    # Methods using data
+    # Methods using data / quantiles
     #   * _x: Internal function.
     #       Takes and returns eagerpy tensors.
     #       Uses self.data and self.cut, assumes params have been validated.
@@ -394,6 +438,23 @@ class Model:
         return self._cdf(params)
 
     def _cdf(self, params: dict):
+        raise NotImplementedError
+
+    def ppf(
+        self, quantiles=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
+    ):
+        return self.ppf_(quantiles=quantiles, params=params, cut=cut, **kwargs).raw
+
+    def ppf_(
+        self, quantiles=NotChanged, params: dict = None, *, cut=cut, **kwargs
+    ) -> ep.TensorType:
+        params = self.validate_params(params, **kwargs)
+        self = self(quantiles=quantiles, cut=cut)
+        if self.quantiles is None:
+            raise ValueError("Provide quantiles")
+        return self._ppf(params)
+
+    def _ppf(self, params: dict):
         raise NotImplementedError
 
     ##
