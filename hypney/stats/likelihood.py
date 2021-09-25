@@ -74,7 +74,7 @@ class PLROrZero(PLR):
             return 0
         return result
 
-    def _build_dist():
+    def _build_dist(self):
         return hypney.models.DiracDelta(rate=0.5) + hypney.models.Chi2(df=1, rate=0.5)
 
 
@@ -93,7 +93,10 @@ class SignedPLR(PLR):
             # Low / Deficit hypothesis (if poi ~ rate)
             return -result
 
-    def _build_dist():
-        return hypney.models.NegativeData(
-            hypney.models.Chi2(df=1, rate=0.5)
+    def _dist_params(self, params):
+        return dict()
+
+    def _build_dist(self):
+        return hypney.models.Chi2(df=1, rate=0.5).transformed_data(
+            scale=-1
         ) + hypney.models.Chi2(df=1, rate=0.5)

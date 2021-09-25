@@ -4,27 +4,30 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class ScaleShiftData(hypney.WrappedModel):
-    """A model which scales and shifts data, then feeds it to another model.
+class TransformedDataModel(hypney.WrappedModel):
+    """Model for data that has been shifted, then scaled.
 
     Args (beyond those of Model):
-     - orig_model: original model taking transformed parameters
-     - shift: constant to add to scaled data
-     - scale: constant to multiply data by
+     - orig_model: original model
+     - shift: constant to add to data
+     - scale: constant to multiply shifted data
     """
 
     shift = 0.0
     scale = 1.0
 
-    def _transform_data(self):
-        result = self.data * self.scale + self.shift
-        return result
+    def _data_from_orig(self, orig_data):
+        """Apply to data generated from model"""
+        return self.scale * (orig_data + self.shift)
 
-    def _reverse_transform_data(self, orig_data):
-        return (orig_data - self.shift) / self.scale
+    def _data_to_orig(self):
+        """Return self.data, with reverse of _data_from_orig applied
+        so it can be fed to original model.
+        """
+        return (self.data / self.scale) - self.shift
 
-    def _transform_data_jac_det(self):
-        return abs(self.scale)
+    def _transform_jac_det(self):
+        return abs(1 / self.scale)
 
     ##
     # Initialization
@@ -40,7 +43,7 @@ class ScaleShiftData(hypney.WrappedModel):
         super().__init__(*args, **kwargs)
 
     def _init_data(self):
-        self._orig_model = self._orig_model(data=self._transform_data())
+        self._orig_model = self._orig_model(data=self._data_to_orig())
 
     def _init_quantiles(self):
         raise NotImplementedError
@@ -48,15 +51,15 @@ class ScaleShiftData(hypney.WrappedModel):
     # Simulation
 
     def _simulate(self, params):
-        return self._reverse_transform_data(super()._simulate(params))
+        return self._data_from_orig(super()._simulate(params))
 
     def _rvs(self, size: int, params: dict):
-        return self._reverse_transform_data(super()._rvs(size=size, params=params))
+        return self._data_from_orig(super()._rvs(size=size, params=params))
 
     # Methods using data / quantiles
 
     def _pdf(self, params):
-        return super()._pdf(params) * self._transform_data_jac_det()
+        return super()._pdf(params) * self._transform_jac_det()
 
     def _cdf(self, params):
         result = super()._cdf(params)
@@ -65,8 +68,7 @@ class ScaleShiftData(hypney.WrappedModel):
         return result
 
     def _ppf(self, params):
-        result = super()._ppf(params)
-        return self.scale * result + self.shift
+        return self._data_from_orig(super()._ppf(params))
 
     # Methods not using data
 
@@ -74,22 +76,7 @@ class ScaleShiftData(hypney.WrappedModel):
         return super()._rate(params)
 
     def _mean(self, params):
-        return self._reverse_transform_data(super()._mean(params))
+        return self._data_from_orig(super()._mean(params))
 
     def _std(self, params: dict):
-        # TODO: this is part of reverse_transform_data..
-        orig_std = super()._std(params)
-        return orig_std / self.scale
-
-
-@export
-class NegativeData(ScaleShiftData):
-    scale = -1
-
-
-@export
-class NormalizedData(ScaleShiftData):
-    def __init__(self, orig_model=hypney.NotChanged, *args, **kwargs):
-        kwargs.setdefault("scale", orig_model.std())
-        kwargs.setdefault("shift", orig_model.mean())
-        return super().__init__(orig_model=orig_model, *args, **kwargs)
+        return super()._std(params) * self.scale

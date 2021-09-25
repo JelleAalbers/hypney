@@ -1,4 +1,5 @@
 from copy import copy
+import functools
 
 import eagerpy as ep
 import numpy as np
@@ -12,19 +13,29 @@ export, __all__ = hypney.exporter()
 @export
 class Statistic:
     model: hypney.Model  # Model of the data
-    dist: hypney.Model  # Model of the statistic; takes same parameters
+    dist: hypney.Model = None  # Model of the statistic; takes same parameters
 
     def __init__(self, model: hypney.Model, data=hypney.NotChanged, dist=None):
         self.model = model
 
-        if dist is None and hasattr(self, "_build_dist"):
+        if dist is None:
+            if hasattr(self, "_build_dist"):
+                self.dist = hypney.models.Reparametrized(
+                    self._build_dist(),
+                    transform_params=self._dist_params,
+                    param_specs=self.model.param_specs,
+                )
+        else:
+            # Distribution passed by user. Make it take all model params,
+            # and ignore ones it does not depend on.
+            filter_params = functools.partial(
+                _filter_params, allowed_names=dist.param_names
+            )
             self.dist = hypney.models.Reparametrized(
-                self._build_dist(),
-                transform_params=self._dist_params,
+                dist,
+                transform_params=filter_params,
                 param_specs=self.model.param_specs,
             )
-        else:
-            self.dist = dist
 
         self._set_data(data)
 
@@ -36,12 +47,12 @@ class Statistic:
             self._init_data()
 
     @property
-    def data(self) -> ep.types.NativeTensor:
+    def data(self) -> ep.Tensor:
         return self.model.data
 
     def _dist_params(self, params):
         """Return distribution params given model params"""
-        _ = params  # Prevent static analyzer warning
+        # Default assumption is that distribution is parameter-free
         return dict()
 
     def validate_data(self, data):
@@ -117,3 +128,8 @@ class IndependentStatistic(Statistic):
 
     def _compute(self):
         raise NotImplementedError
+
+
+def _filter_params(params, allowed_names):
+    # just because pickle doesn't like lambdas...
+    return {name: params[name] for name in allowed_names}

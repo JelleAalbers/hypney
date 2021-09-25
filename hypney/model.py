@@ -182,6 +182,18 @@ class Model:
             cut = kwargs
         return hypney.models.CutModel(self, cut)
 
+    def transformed_data(self, shift=0.0, scale=1):
+        """Return model for data that has been shifted, then scaled,
+        by constants.
+        """
+        return hypney.models.TransformedDataModel(self, shift=shift, scale=scale)
+
+    def normalized_data(self):
+        """Return model for data that was normalized using the current model's
+        mean and standard deviation.
+        """
+        return self.transformed_data(shift=-self.mean(), scale=1 / self.std())
+
     def fix(self, params=None, **kwargs):
         """Return new model with parameters in fix fixed
 

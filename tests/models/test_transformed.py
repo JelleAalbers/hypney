@@ -20,7 +20,7 @@ def test_filter_params():
 def test_negative_data():
 
     m = hypney.models.Uniform()
-    m_flip = hypney.models.NegativeData(m)
+    m_flip = m.transformed_data(scale=-1)
 
     assert m_flip.pdf(data=-0.3) == m.pdf(data=0.3)
     assert m_flip.diff_rate(data=-0.3) == m.pdf(data=0.3)
@@ -30,7 +30,7 @@ def test_negative_data():
 
 def test_normalize_data():
     m = hypney.models.Norm(loc=42, scale=12)
-    m_std = hypney.models.NormalizedData(m)
+    m_std = m.normalized_data()
     assert m_std.pdf(1.3) == stats.norm.pdf(1.3)
     assert m_std.cdf(1.3) == stats.norm.cdf(1.3)
     assert m_std.mean() == 0.0
