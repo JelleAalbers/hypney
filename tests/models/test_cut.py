@@ -13,3 +13,6 @@ def test_cut():
     m_half = hypney.models.Halfnorm()
     x = np.linspace(-5, 5, 100)
     np.testing.assert_almost_equal(m_cut.pdf(x), m_half.pdf(x))
+    np.testing.assert_almost_equal(m_cut.diff_rate(x), m_half.diff_rate(x) / 2)
+
+    np.testing.assert_almost_equal(m_cut.rate(), 0.5)

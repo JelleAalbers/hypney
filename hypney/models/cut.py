@@ -133,7 +133,7 @@ class CutModel(hypney.WrappedModel):
     # Methods not using data
 
     def _rate(self, params: dict):
-        return super().rate(params) * self._cut_efficiency(params)
+        return super()._rate(params) * self._cut_efficiency(params)
 
     def _mean(self, params: dict):
         raise NotImplementedError
