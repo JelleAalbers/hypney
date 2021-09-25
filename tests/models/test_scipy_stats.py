@@ -46,11 +46,6 @@ def test_uniform():
     assert m2 != m
     assert m2.rate() == 50.0
 
-    # Test cut efficiency
-    m = hypney.models.Uniform(rate=100)
-    assert m.cut_efficiency(cut=(0, 0.5)) == 0.5
-    assert m.rate(cut=(0, 0.5)) == 50.0
-
     # Test freezing data
     m = hypney.models.Uniform(rate=100)
     with pytest.raises(Exception):

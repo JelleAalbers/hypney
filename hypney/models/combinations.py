@@ -77,10 +77,6 @@ class Mixture(AssociativeCombination):
             new_obs.append(hypney.Observable(name=obs_0.name, min=new_min, max=new_max))
         return tuple(new_obs)
 
-    def _init_cut(self):
-        self.models = tuple([m(cut=self.cut) for m in self.models])
-        super()._init_cut()
-
     def _init_data(self):
         self.models = tuple([m(data=self.data) for m in self.models])
         super()._init_data()
@@ -193,11 +189,6 @@ class TensorProduct(AssociativeCombination):
         _data_list = hypney.utils.eagerpy.split(self.data, self._obs_splits(), axis=-1)
         self.models = tuple([m(data=d) for m, d in zip(self.models, _data_list)])
         super()._init_data()
-
-    def _init_cut(self):
-        _cut_list = hypney.utils.eagerpy.split(self.cut, self._obs_splits())
-        self.models = tuple([m(cut=c) for m, c in zip(self.models, _cut_list)])
-        super()._init_cut()
 
     def _rvs(self, size: int, params: dict) -> np.ndarray:
         return np.concatenate(

@@ -1,7 +1,5 @@
 from copy import copy
 import functools
-import itertools
-import math
 import typing as ty
 
 import eagerpy as ep
@@ -18,7 +16,6 @@ class Model:
     name: str = ""
     param_specs: ty.Tuple[hypney.ParameterSpec] = (hypney.DEFAULT_RATE_PARAM,)
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
-    cut: ty.Union[hypney.NoCut, tuple] = hypney.NoCut
     data: ep.Tensor = None
     quantiles: ep.Tensor = None
 
@@ -51,7 +48,6 @@ class Model:
         params=NotChanged,  # Really defaults...
         param_specs=NotChanged,
         observables=NotChanged,
-        cut=NotChanged,
         quantiles=None,
         **kwargs,
     ):
@@ -62,8 +58,6 @@ class Model:
             self.param_specs = param_specs
         if observables is not NotChanged:
             self.observables = observables
-        if cut is not NotChanged:
-            self._set_cut(cut)
 
         self._validate_and_set_defaults(params, **kwargs)
         self._set_data(data)
@@ -113,16 +107,6 @@ class Model:
             [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
         )
 
-    def _set_cut(self, cut):
-        if cut is NotChanged:
-            return
-        self.cut = self.validate_cut(cut)
-        self._init_cut()
-
-    def _init_cut(self):
-        """Called during initialization, if cut is to be frozen"""
-        pass
-
     def _has_redefined(self, method_name, from_base=None):
         """Returns if method_name is redefined from Model.method_name"""
         if from_base is None:
@@ -151,7 +135,6 @@ class Model:
         name=NotChanged,
         data=NotChanged,
         params=NotChanged,
-        cut=NotChanged,
         quantiles=NotChanged,
         fix=None,
         fix_except=None,
@@ -161,7 +144,6 @@ class Model:
         if (
             name is NotChanged
             and data is NotChanged
-            and cut is NotChanged
             and quantiles is NotChanged
             and not params
             and not kwargs
@@ -174,7 +156,6 @@ class Model:
             new_self.name = name
         new_self._validate_and_set_defaults(params, **kwargs)
         new_self._set_data(data)
-        new_self._set_cut(cut)
         new_self._set_quantiles(quantiles)
         if fix is not None:
             new_self = new_self.fix(fix)
@@ -183,6 +164,23 @@ class Model:
         if fix_except is not None:
             new_self = new_self.fix_except(fix)
         return new_self
+
+    def cut(self, *args, **kwargs):
+        """Return new model with observables cut to a rectangular region
+
+        Args: left-right boundaries, specified in one of many legal ways.
+        Just try some :-)
+        """
+        if args and kwargs:
+            raise ValueError("Specify either keyword or position arguments")
+        if args:
+            if len(args) == 1:
+                cut = args[0]
+            else:
+                cut = args
+        if kwargs:
+            cut = kwargs
+        return hypney.models.CutModel(self, cut)
 
     def fix(self, params=None, **kwargs):
         """Return new model with parameters in fix fixed
@@ -263,7 +261,13 @@ class Model:
             # Int/float like
             data = [data]
         if isinstance(data, (list, tuple)):
-            data = np.asarray(data)
+            if self.data is None:
+                data = np.asarray(data)
+            else:
+                # Preserve existing tensor type
+                data = hypney.utils.eagerpy.sequence_to_tensor(
+                    data, match_type=self.data
+                )
         if len(data.shape) == 1:
             data = data[:, None]
         data = ep.astensor(data)
@@ -297,25 +301,6 @@ class Model:
         quantiles = ep.astensor(quantiles)
         return quantiles
 
-    def validate_cut(self, cut):
-        """Return a valid cut, i.e. NoCut or tuple of (l, r) tuples for each observable.
-        """
-        if cut is hypney.NoCut:
-            return cut
-        if cut is None:
-            raise ValueError("None is not a valid cut, use NoCut")
-        if isinstance(cut, (list, np.ndarray, ep.Tensor)):
-            cut = tuple(cut)
-        if not isinstance(cut, tuple):
-            raise ValueError("Cut should be a tuple")
-        if len(cut) == 2 and len(self.observables) == 1:
-            cut = (cut,)
-        if len(cut) != len(self.observables):
-            raise ValueError("Cut should have same length as observables")
-        if any([len(c) != 2 for c in cut]):
-            raise ValueError("Cut should be a tuple of 2-tuples")
-        return cut
-
     ##
     # Simulation. These functions return numpy arrays, not eagerpy tensors.
     ##
@@ -326,9 +311,9 @@ class Model:
             self, "rate_before_efficiencies"
         )
 
-    def simulate(self, params: dict = None, *, cut=NotChanged, **kwargs) -> np.ndarray:
+    def simulate(self, params: dict = None, **kwargs) -> np.ndarray:
         params = self.validate_params(params, **kwargs)
-        return self(cut=cut)._simulate(params)
+        return self._simulate(params)
 
     def _simulate(self, params) -> np.ndarray:
         if self.simulate_partially_efficient:
@@ -344,7 +329,6 @@ class Model:
             n = np.random.poisson(mu)
             data = self._rvs(size=n, params=params)
             assert len(data) == n
-            data = self.apply_cut_(data).raw
 
         return data
 
@@ -362,37 +346,21 @@ class Model:
     # Methods using data / quantiles
     #   * _x: Internal function.
     #       Takes and returns eagerpy tensors.
-    #       Uses self.data and self.cut, assumes params have been validated.
+    #       Uses self.data, assumes params have been validated.
     #   * x_: 'Friendly' function for use in other hypney classes.
     #       Flexible input, returns eagerpy tensors.
     #   * x: External function, for users to call directly.
     #       Flexible input, returm value has same type as data.
     ##
 
-    def apply_cut(self, data=NotChanged, cut=NotChanged):
-        return self.apply_cut_(data=data, cut=cut).raw
-
-    def apply_cut_(self, data=NotChanged, cut=NotChanged):
-        return self(data=data, cut=cut)._apply_cut()
-
-    def _apply_cut(self):
-        if self.cut == hypney.NoCut:
-            return self.data
-        passed = 1 + 0 * self.data[:, 0]
-        for dim_i, (l, r) in enumerate(self.cut):
-            passed *= (l <= self.data[:, dim_i]) & (self.data[:, dim_i] < r)
-        return self.data[passed]
-
-    def diff_rate(
-        self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
-    ):
-        return self.diff_rate_(data=data, params=params, cut=cut, **kwargs).raw
+    def diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.diff_rate_(data=data, params=params, **kwargs).raw
 
     def diff_rate_(
-        self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
+        self, data=NotChanged, params: dict = None, **kwargs
     ) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        self = self(data=data, cut=cut)
+        self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
         return self._diff_rate(params)
@@ -405,14 +373,12 @@ class Model:
             )
         return self._pdf(params=params) * self._rate(params=params)
 
-    def pdf(self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs):
-        return self.pdf_(data=data, params=params, cut=cut, **kwargs).raw
+    def pdf(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.pdf_(data=data, params=params, **kwargs).raw
 
-    def pdf_(
-        self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
-    ) -> ep.TensorType:
+    def pdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        self = self(data=data, cut=cut)
+        self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
         return self._pdf(params)
@@ -426,14 +392,12 @@ class Model:
             )
         return self._diff_rate(params) / self._rate(params)
 
-    def cdf(self, data=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs):
-        return self.cdf_(data=data, params=params, cut=cut, **kwargs).raw
+    def cdf(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.cdf_(data=data, params=params, **kwargs).raw
 
-    def cdf_(
-        self, data=NotChanged, params: dict = None, *, cut=cut, **kwargs
-    ) -> ep.TensorType:
+    def cdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        self = self(data=data, cut=cut)
+        self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
         return self._cdf(params)
@@ -441,16 +405,14 @@ class Model:
     def _cdf(self, params: dict):
         raise NotImplementedError
 
-    def ppf(
-        self, quantiles=NotChanged, params: dict = None, *, cut=NotChanged, **kwargs
-    ):
-        return self.ppf_(quantiles=quantiles, params=params, cut=cut, **kwargs).raw
+    def ppf(self, quantiles=NotChanged, params: dict = None, **kwargs):
+        return self.ppf_(quantiles=quantiles, params=params, **kwargs).raw
 
     def ppf_(
-        self, quantiles=NotChanged, params: dict = None, *, cut=cut, **kwargs
+        self, quantiles=NotChanged, params: dict = None, **kwargs
     ) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
-        self = self(quantiles=quantiles, cut=cut)
+        self = self(quantiles=quantiles)
         if self.quantiles is None:
             raise ValueError("Provide quantiles")
         return self._ppf(params)
@@ -460,64 +422,83 @@ class Model:
 
     ##
     # Methods not using data; return a simple float
-    # As above, _x are internal functions (use self.data and self.cut)
-    # whereas x are external functions (do input validation, set data and cut if needed)
+    # As above, _x are internal functions (use self.data)
+    # whereas x are external functions (do input validation, set data if needed)
     ##
 
-    def rate(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+    def rate(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)
-        return self(cut=cut)._rate(params)
+        return self._rate(params)
 
     def _rate(self, params: dict):
-        return params[hypney.DEFAULT_RATE_PARAM.name] * self._cut_efficiency(params)
+        return params[hypney.DEFAULT_RATE_PARAM.name]
 
-    def mean(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+    def mean(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)
-        return self(cut=cut)._mean(params)
+        return self._mean(params)
 
     def _mean(self, params: dict):
         return NotImplementedError
 
-    def var(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+    def var(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)
-        return self(cut=cut)._var(params)
+        return self._var(params)
 
     def _var(self, params: dict):
         return self._std(params) ** 2
 
-    def std(self, params: dict = None, *, cut=NotChanged, **kwargs) -> float:
+    def std(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)
-        return self(cut=cut)._std(params)
+        return self._std(params)
 
     def _std(self, params: dict):
         return NotImplementedError
 
-    def cut_efficiency(self, params: dict = None, cut=NotChanged, **kwargs) -> float:
-        params = self.validate_params(params, **kwargs)
-        return self(cut=cut)._cut_efficiency(params)
 
-    def _cut_efficiency(self, params: dict):
-        if self.cut is hypney.NoCut:
-            return 1.0
-        if not hasattr(self, "cdf"):
-            raise NotImplementedError("Nontrivial cuts require a cdf")
-        # Evaluate CDF at rectangle endpoints, add up with alternating signs,
-        # always + in upper right.
-        # TODO: Not sure this is correct for n > 2!
-        # (for n=3 looks OK, for higher n I can't draw/visualize)
-        lower_sign = (-1) ** (len(self.cut))
-        signs, points = zip(
-            *[
-                (
-                    math.prod(indices),
-                    [c[int(0.5 * j + 0.5)] for (c, j) in zip(self.cut, indices)],
-                )
-                for indices in itertools.product(
-                    *[[lower_sign, -lower_sign]] * len(self.cut)
-                )
-            ]
-        )
-        return ((signs) * self.cdf_(data=points, params=params)).sum()
+@export
+class WrappedModel(Model):
+    """A model wrapping another model"""
+
+    def __init__(self, orig_model=hypney.NotChanged, *args, **kwargs):
+        if orig_model is not hypney.NotChanged:
+            # No need to make a copy now; any attempted state change
+            # (set data, change defaults...) will trigger that
+            self._orig_model = orig_model
+        kwargs.setdefault("observables", self._orig_model.observables)
+        kwargs.setdefault("param_specs", self._orig_model.param_specs)
+        super().__init__(*args, **kwargs)
+
+    def _init_data(self):
+        self._orig_model = self._orig_model(data=self.data)
+
+    def _init_quantiles(self):
+        self._orig_model = self._orig_model(quantiles=self.quantiles)
+
+    def _simulate(self, params):
+        return self._orig_model._simulate(params)
+
+    def _rvs(self, size: int, params: dict):
+        return self._orig_model._rvs(size=size, params=params)
+
+    def _pdf(self, params):
+        return self._orig_model._pdf(params)
+
+    def _cdf(self, params):
+        return self._orig_model._cdf(params)
+
+    def _ppf(self, params):
+        return self._orig_model._ppf(params)
+
+    # Methods not using data
+
+    def _rate(self, params):
+        return self._orig_model._rate(params)
+
+    def _mean(self, params):
+        return self._orig_model._mean(params)
+
+    def _std(self, params: dict):
+        return self._orig_model._std(params)
 
 
 def _merge_dicts(x, y):

@@ -97,7 +97,6 @@ class Interpolation(hypney.Model):
 
     def _init_data(self):
         # Update anchor models to ones with appropriate data
-        # TODO: what about cut?
         self.anchor_models = {
             anchor: model(data=self.data)
             for anchor, model in self.anchor_models.items()
@@ -125,13 +124,6 @@ class Interpolation(hypney.Model):
         if self._has_redefined("_ppf"):
             self._build_interpolator("ppf", tensorlib=tensorlib)
 
-    def _init_cut(self):
-        if not isinstance(self.data, ep.NumPyTensor):
-            raise NotImplementedError("Interpolation only works on numpy data")
-        if self.data is not None:
-            self._init_data()
-        super()._init_cut()
-
     def _build_interpolator(self, itp_name: str, tensorlib):
         self._interpolators[itp_name] = self.interp_maker.make_interpolator(
             # itp_name=itp_name does not work! Confusing...
@@ -139,11 +131,7 @@ class Interpolation(hypney.Model):
             tensorlib=tensorlib,
         )
 
-    def _call_interpolator(
-        self, itp_name, params: dict = None, *, cut=hypney.NotChanged
-    ):
-        if cut is not hypney.NotChanged:
-            self = self(cut=cut)
+    def _call_interpolator(self, itp_name, params: dict = None):
         if not itp_name in self._interpolators:
             # No interpolator was built (e.g. diff_rate when pdf and rate known)
             return getattr(super(), "_" + itp_name)(params)
