@@ -93,7 +93,7 @@ class RegularGridInterpolator:
 
     def get_values(self, list_of_indices):
         assert self.values is not None
-        return self.values[[x.raw for x in list_of_indices]]
+        return self.values[tuple([x.raw for x in list_of_indices])]
 
 
 @export

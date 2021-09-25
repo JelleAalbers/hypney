@@ -292,7 +292,8 @@ class Model:
                 quantiles = hypney.utils.eagerpy.sequence_to_tensor(
                     quantiles, match_type=self.data
                 )
-        assert 0 <= quantiles.min() < quantiles.max() <= 1
+        # Note min <= max, maybe there is only one unique quantile
+        assert 0 <= quantiles.min() <= quantiles.max() <= 1
         quantiles = ep.astensor(quantiles)
         return quantiles
 
