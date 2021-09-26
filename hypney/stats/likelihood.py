@@ -31,7 +31,7 @@ class LikelihoodRatio(hypney.Statistic):
         return -2 * (self.ll._compute(params=params) - self.ll_bestfit)
 
     def _build_dist(self):
-        return hypney.models.Chi2(df=len(self.model.param_names))
+        return hypney.models.chi2(df=len(self.model.param_names))
 
 
 @export
@@ -57,7 +57,7 @@ class PLR(LikelihoodRatio):
         return self.ll_conditional_fit - self.ll_bestfit
 
     def _build_dist(self):
-        return hypney.models.Chi2(df=len(self.poi))
+        return hypney.models.chi2(df=len(self.poi))
 
 
 class PLROrZero(PLR):
@@ -75,7 +75,7 @@ class PLROrZero(PLR):
         return result
 
     def _build_dist(self):
-        return hypney.models.DiracDelta(rate=0.5) + hypney.models.Chi2(df=1, rate=0.5)
+        return hypney.models.DiracDelta(rate=0.5) + hypney.models.chi2(df=1, rate=0.5)
 
 
 @export
@@ -97,6 +97,6 @@ class SignedPLR(PLR):
         return dict()
 
     def _build_dist(self):
-        return hypney.models.Chi2(df=1, rate=0.5).transformed_data(
+        return hypney.models.chi2(df=1, rate=0.5).transformed_data(
             scale=-1
-        ) + hypney.models.Chi2(df=1, rate=0.5)
+        ) + hypney.models.chi2(df=1, rate=0.5)

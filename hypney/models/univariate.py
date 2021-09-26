@@ -1,39 +1,43 @@
 import inspect
-import typing as ty
 
 import eagerpy as ep
 from eagerpy.astensor import _get_module_name
 import numpy as np
-from scipy import stats
+from scipy import stats as scipy_stats
 
 import hypney
+from hypney import DEFAULT_OBSERVABLE
 
 export, __all__ = hypney.exporter()
 
-##
-# Univariate scipy.stats (and jax.scipy.stats) distributions
-##
 
+class UnivariateDistribution(hypney.Model):
+    scipy_name: str = None
+    # jax name is assumed equal to scipy name
+    tfp_name: str = None
+    torch_name: str = None
 
-class ScipyUnivariate(hypney.Model):
-    scipy_dist: ty.Union[stats.rv_continuous, stats.rv_discrete]
     param_specs = hypney.RATE_LOC_SCALE_PARAMS
+    observables = (DEFAULT_OBSERVABLE,)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._dists = dict(scipy=self.scipy_dist)
+        if hasattr(self, "scipy_dist"):
+            # Needed for rv_histogram
+            self._dists = dict(scipy=self.scipy_dist)
+        else:
+            # Use the distribution name. This is more flexible; scipy might add
+            # distributions across versions.
+            self._dists = dict(scipy=getattr(scipy_stats, self.scipy_name, None))
 
     def _dist_params(self, params):
+        # Remove rate parameter; scipy dists have no such concept
         return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
 
-    @property
-    def distname(self):
-        return self.scipy_dist.name
-
-    def dist(self):
+    def dist_for_data(self):
         """Return distribution from library appropriate to self.data"""
         if isinstance(self.data, ep.NumPyTensor) or self.data is None:
-            return self.scipy_dist
+            return self._dists["scipy"]
 
         modname = _get_module_name(self.data.raw)
         if modname.startswith("jax"):
@@ -43,40 +47,34 @@ class ScipyUnivariate(hypney.Model):
             return self._dists[modname]
 
         if modname == "jax":
-            if not hasattr(ep.jax.scipy.stats, self.distname):
+            if not hasattr(ep.jax.scipy.stats, self.scipy_name):
                 raise NotImplementedError(f"{self.distname} not implemented in JAX")
             result = getattr(ep.jax.scipy.stats, self.distname)
 
         elif modname == "torch":
             import torch  # noqa
 
-            dname = TORCH_DISTRIBUTION_NAMES.get(
-                self.distname, self.distname.capitalize()
-            )
-            if not hasattr(torch.distributions, dname):
+            if not self.torch_name or not hasattr(torch.distributions, self.torch_name):
                 raise NotImplementedError(
-                    f"{dname} not implemented in torch.distributions"
+                    f"{self.__class__.__name__} distribution not available in PyTorch"
                 )
             result = TorchDistributionWrapper(
-                getattr(torch.distributions, dname), self.defaults
+                getattr(torch.distributions, self.torch_name), self.defaults
             )
 
         elif modname == "tensorflow":
             import tensorflow_probability as tfp  # noqa
 
-            dname = TFP_DISTRIBUTION_NAMES.get(
-                self.distname, self.distname.capitalize()
-            )
-            if not hasattr(tfp.distributions, dname):
+            if not self.tfp_name or not hasattr(tfp.distributions, self.tfp_name):
                 raise NotImplementedError(
-                    f"{dname} not implemented in tensorflow_probability"
+                    f"{self.__class__.__name__} distribution not available in TensorFlow Probability"
                 )
             result = TFPDistributionWrapper(
-                getattr(tfp.distributions, dname), self.defaults
+                getattr(tfp.distributions, self.tfp_name), self.defaults
             )
 
         else:
-            raise ValueError(f"Unkown tensor from module {modname}")
+            raise RuntimeError(f"Unkown tensor from module {modname}?!")
 
         self._dists[modname] = result
         return result
@@ -84,69 +82,44 @@ class ScipyUnivariate(hypney.Model):
     # Methods using data / quantiles
 
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
-        return self.scipy_dist.rvs(size=size, **self._dist_params(params))[:, None]
+        # Simulation requires the scipy dist
+        if not "scipy" in self._dists:
+            raise NotImplementedError(
+                f"This version of scipy does not have {self.scipy_name}"
+            )
+        return self._dists["scipy"].rvs(size=size, **self._dist_params(params))[:, None]
 
     def _pdf(self, params: dict) -> ep.TensorType:
-        dist = self.dist()
+        dist = self.dist_for_data()
         pdf = dist.pdf if hasattr(dist, "pdf") else dist.pmf
         return ep.astensor(pdf(self.data[:, 0].raw, **self._dist_params(params)))
 
     def _cdf(self, params: dict) -> np.ndarray:
         return ep.astensor(
-            self.dist().cdf(self.data[:, 0].raw, **self._dist_params(params))
+            self.dist_for_data().cdf(self.data[:, 0].raw, **self._dist_params(params))
         )
 
     def _ppf(self, params: dict) -> np.ndarray:
         return ep.astensor(
-            self.dist().ppf(self.quantiles.raw, **self._dist_params(params))
+            self.dist_for_data().ppf(self.quantiles.raw, **self._dist_params(params))
         )
 
     # Methods not using data
 
     def _mean(self, params):
-        return self.dist().mean(**self._dist_params(params))
+        return self.dist_for_data().mean(**self._dist_params(params))
 
     def _std(self, params):
-        return self.dist().std(**self._dist_params(params))
+        return self.dist_for_data().std(**self._dist_params(params))
 
 
-# Create classes for all continuous distributions
-for dname in dir(stats):
-    dist = getattr(stats, dname)
-    if not isinstance(dist, (stats.rv_continuous, stats.rv_discrete)):
-        continue
-    is_discrete = isinstance(dist, stats.rv_discrete)
+class UnivariateDiscreteDistribution(UnivariateDistribution):
 
-    # Construct appropriate param spec for this distribution.
-    # Discrete distributions don't have a scale parameter.
-    # We'll assume shape parameters are positive and have default 0...
-    # TODO: this can't always be true!
-    spec = list(hypney.RATE_LOC_PARAMS if is_discrete else hypney.RATE_LOC_SCALE_PARAMS)
-    if dist.shapes:
-        for pname in dist.shapes.split(", "):
-            spec.append(
-                hypney.ParameterSpec(name=pname, min=0, max=float("inf"), default=0)
-            )
-
-    # Create the new class
-    dname = dname.capitalize()
-    locals()[dname] = dist_class = type(dname, (ScipyUnivariate,), dict())
-    dist_class.scipy_dist = dist
-    dist_class.param_specs = tuple(spec)
-    if is_discrete:
-        dist_class.observables = (
-            hypney.Observable(
-                name=hypney.DEFAULT_OBSERVABLE.name,
-                min=-float("inf"),
-                max=float("inf"),
-                integer=True,
-            ),
-        )
-    export(dist_class)
+    observables = (DEFAULT_OBSERVABLE._replace(integer=True),)
 
 
 @export
-class From1DHistogram(ScipyUnivariate):
+class From1DHistogram(UnivariateDistribution):
     def __init__(self, histogram, bin_edges=None, *args, **kwargs):
         if bin_edges is None:
             # We probably got some kind of histogram container
@@ -161,56 +134,13 @@ class From1DHistogram(ScipyUnivariate):
             else:
                 raise ValueError("Pass histogram and bin edges arrays")
 
-        self.scipy_dist = stats.rv_histogram((histogram, bin_edges),)
+        self.scipy_dist = scipy_stats.rv_histogram((histogram, bin_edges),)
         super().__init__(*args, **kwargs)
 
 
 ##
 # Tensorflow / Pytorch support
 ##
-
-# TODO: We must check that the parametrizations of the distributions
-# are consistent between scipy, jax, torch, tf...
-# Cannot just assume this; it will silently corrupt users' results if not!
-
-TORCH_DISTRIBUTION_NAMES = dict(
-    # Distributions with different names in torch.distributions
-    # Several other distributions are also supported
-    # but their names differ only by capitalization (cauchy, chi2, ...)
-    norm="Normal",
-    epon="Exponential",
-    f="FisherSnedecor",
-    gumbel_r="Gumbel",
-    halfcauchy="HalfCauchy",
-    halfnorm="HalfNormal",
-    lognorm="LogNormal",
-    t="StudentT",
-    vonmises="VonMises",
-    weibull_min="Weibull",
-    binom="Binomial",
-    geom="Geometric",
-    nbinom="NegativeBinomial",
-)
-
-
-TFP_DISTRIBUTION_NAMES = dict(
-    norm="Normal",
-    epon="Exponential",
-    gumbel_r="Gumbel",
-    halfcauchy="HalfCauchy",
-    halfnorm="HalfNormal",
-    invgamma="InverseGamma",
-    lognorm="LogNormal",
-    t="StudentT",
-    # triang='Triangular',   # different parametrization
-    # truncnorm='TruncatedNormal',   # different parametrization?
-    vonmises="VonMises",
-    weibull_min="Weibull",
-    betabinom="BetaBinomial",
-    binom="Binomial",
-    geom="Geometric",
-    nbinom="NegativeBinomial",
-)
 
 
 class TorchDistributionWrapper:

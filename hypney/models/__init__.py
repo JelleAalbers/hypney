@@ -1,4 +1,5 @@
 from .univariate import *
+from .univariate_dist_list import *
 from .delta import *
 from .histogram import *
 

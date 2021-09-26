@@ -9,17 +9,17 @@ import hypney
 
 
 def test_uniform():
-    m = hypney.models.Uniform()
+    m = hypney.models.uniform()
     assert m.rate() == hypney.DEFAULT_RATE_PARAM.default
     assert m.rate(params=dict(rate=100.0)) == 100.0
 
     # Test setting params on init
-    m = hypney.models.Uniform(rate=100)
+    m = hypney.models.uniform(rate=100)
     assert m.rate() == 100.0
     assert m.simulate().shape[0] > 0
 
     # Test simulate
-    m = hypney.models.Uniform(rate=0)
+    m = hypney.models.uniform(rate=0)
     data = m.simulate()
     assert data.shape == (0, 1)
     data = m.rvs(size=5)
@@ -47,7 +47,7 @@ def test_uniform():
     assert m2.rate() == 50.0
 
     # Test freezing data
-    m = hypney.models.Uniform(rate=100)
+    m = hypney.models.uniform(rate=100)
     with pytest.raises(Exception):
         m.pdf()
     m2 = m(data=0)
@@ -56,7 +56,7 @@ def test_uniform():
     assert m2(data=1) not in (m, m2)
 
     # Models can be pickled and unpickled
-    m = hypney.models.Uniform(loc=0.5)
+    m = hypney.models.uniform(loc=0.5)
     with tempfile.NamedTemporaryFile() as tempf:
         fn = tempf.name
         with open(fn, mode="wb") as f:
@@ -67,7 +67,7 @@ def test_uniform():
 
 
 def test_beta():
-    m = hypney.models.Beta(a=0.5, b=0.5, rate=100)
+    m = hypney.models.beta(a=0.5, b=0.5, rate=100)
 
     data = m.simulate()
     assert len(data)
@@ -80,7 +80,7 @@ def test_beta():
     m2 = m(rate=20, loc=-100, scale=10)
     assert m2.defaults["a"] == 0.5
     assert m2.rate() == 20.0
-    assert m2.scipy_dist == m.scipy_dist
+    assert m2._dists["scipy"] == m._dists["scipy"]
     data = m2.simulate()
     assert len(data)
     assert data.min() < 0
@@ -94,7 +94,7 @@ def test_beta():
 
 
 def test_poisson():
-    m = hypney.models.Poisson(mu=3, rate=100)
+    m = hypney.models.poisson(mu=3, rate=100)
     data = m.simulate()
     np.testing.assert_equal(m.pdf(data), stats.poisson(mu=3).pmf(data[:, 0]))
     assert m.rate() == 100.0

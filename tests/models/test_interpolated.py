@@ -4,7 +4,7 @@ import numpy as np
 
 def test_interpolated():
     def builder(params):
-        return hypney.models.Uniform(**params, rate=1000)
+        return hypney.models.uniform(**params, rate=1000)
 
     m = hypney.models.Interpolation(builder, param_specs=dict(loc=(-0.5, 0, 0.5)))
 

@@ -4,9 +4,9 @@ import numpy as np
 
 
 def test_mixture():
-    m1 = hypney.models.Uniform(rate=40)
-    m2 = hypney.models.Uniform(rate=20)
-    m3 = hypney.models.Uniform(rate=30)
+    m1 = hypney.models.uniform(rate=40)
+    m2 = hypney.models.uniform(rate=20)
+    m3 = hypney.models.uniform(rate=30)
 
     mix = hypney.models.Mixture(m1, m2)
     # assert mix.param_names == (
@@ -39,16 +39,16 @@ def test_mixture():
     # TODO: Test parameter sharing
 
     # Test mean and std
-    mix = hypney.models.Norm() + hypney.models.Uniform(loc=5, scale=2)
+    mix = hypney.models.norm() + hypney.models.uniform(loc=5, scale=2)
     data = mix.rvs(100_000)
     np.testing.assert_allclose(mix.mean(), data.mean(), rtol=0.05)
     np.testing.assert_allclose(mix.std(), data.std(), rtol=0.05)
 
 
 def test_tensor_product():
-    m1 = hypney.models.Uniform(rate=40)
-    m2 = hypney.models.Uniform(rate=20)
-    m3 = hypney.models.Uniform(rate=30)
+    m1 = hypney.models.uniform(rate=40)
+    m2 = hypney.models.uniform(rate=20)
+    m3 = hypney.models.uniform(rate=30)
 
     prod = m1 ** m2 ** m3
 
