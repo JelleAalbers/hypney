@@ -90,27 +90,30 @@ class CutModel(hypney.WrappedModel):
         params = self.validate_params(params, **kwargs)
         return self._cut_efficiency(params).raw
 
-    def _cut_efficiency(self, params: dict):
+    def _signs(self):
+        yield from itertools.product(*[[-1, 1]] * self.n_dim)
+
+    def _corner_points(self):
+        return [
+            [c[int(0.5 * _sign + 0.5)] for (c, _sign) in zip(self.cut, _signs)]
+            for _signs in self._signs()
+        ]
+
+    def _corners_cdf(self, params: dict):
+        return self._orig_model.cdf_(data=self._corner_points(), params=params)
+
+    def _cut_efficiency(self, params: dict, corners_cdf=None):
         if self.cut is NoCut:
             return 1.0
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")
+        if corners_cdf is None:
+            corners_cdf = self._corners_cdf(params)
         # Evaluate CDF at rectangular endpoints, add up with alternating signs,
-        # always + in upper right.
+        # + in upper right.
         # TODO: Not sure this is correct for n > 2!
         # (for n=3 looks OK, for higher n I can't draw/visualize)
-        signs = [math.prod(x) for x in self._signs()]
-        points = [
-            [c[int(0.5 * j + 0.5)] for (c, j) in zip(self.cut, _signs)]
-            for _signs in self._signs()
-        ]
-        # Careful here, super().cdf_ would call our (not implemented) _cdf!
-        return ((signs) * self._orig_model.cdf_(data=points, params=params)).sum()
-
-    def _signs(self):
-        ndim = len(self.observables)  # TODO: make attribute
-        base = (-1) ** len(self.observables)
-        yield from itertools.product(*[[base, -base]] * ndim)
+        return ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum()
 
     def apply_cut(self, data=hypney.NotChanged):
         return self.apply_cut_(data=data).raw
@@ -141,17 +144,33 @@ class CutModel(hypney.WrappedModel):
         return ep.where(
             self._passes_cut,
             # rate fell but pdf rose
-            super()._diff_rate(params=params),
+            self._orig_model._diff_rate(params=params),
             0,
         )
 
     def _pdf(self, params: dict):
         return ep.where(
-            self._passes_cut, super()._pdf(params) / self._cut_efficiency(params), 0
+            self._passes_cut,
+            self._orig_model._pdf(params) / self._cut_efficiency(params),
+            0,
         )
 
     def _cdf(self, params: dict):
-        raise NotImplementedError
+        if self.n_dim > 1:
+            raise NotImplementedError("nD cut CDF still todo...")
+        c_low, c_high = self._corners_cdf(params)
+        return (self._orig_model._cdf(params) - c_low).clip(0, None) / (c_high - c_low)
 
     def _ppf(self, params: dict):
-        raise NotImplementedError
+        if self.n_dim > 1:
+            raise NotImplementedError("PPF not well-defined in > 1 dimension")
+        c_low, c_high = self._corners_cdf(params)
+
+        # self.quantiles == (orig_quantiles - c_low).clip(0, None) / (c_high - c_low)
+        # Cut always shrinks region and 0 <= quantiles <= 1, so clip never binds
+        # ppf(0) = c_low.
+        orig_quantiles = self.quantiles * (c_high - c_low) + c_low
+
+        result = self._orig_model.ppf_(quantiles=orig_quantiles, params=params)
+
+        return result
