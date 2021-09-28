@@ -98,12 +98,3 @@ def test_poisson():
     data = m.simulate()
     np.testing.assert_equal(m.pdf(data), stats.poisson(mu=3).pmf(data[:, 0]))
     assert m.rate() == 100.0
-
-
-def test_from_histogram():
-    hist, edges = np.array([1, 2, 1]), np.array([0, 1, 2, 3])
-    m = hypney.models.From1DHistogram(hist, edges)
-    data = m.simulate()
-    np.testing.assert_equal(
-        m.pdf(data), stats.rv_histogram((hist, edges),).pdf(data[:, 0]),
-    )

@@ -118,26 +118,6 @@ class UnivariateDiscreteDistribution(UnivariateDistribution):
     observables = (DEFAULT_OBSERVABLE._replace(integer=True),)
 
 
-@export
-class From1DHistogram(UnivariateDistribution):
-    def __init__(self, histogram, bin_edges=None, *args, **kwargs):
-        if bin_edges is None:
-            # We probably got some kind of histogram container
-            if isinstance(histogram, tuple) and len(histogram) == 2:
-                histogram, bin_edges = histogram
-            elif hasattr(histogram, "to_numpy"):
-                # boost_histogram / hist
-                histogram, bin_edges = histogram.to_numpy()
-            elif hasattr(histogram, "bin_edges"):
-                # multihist
-                histogram, bin_edges = histogram.histogram, histogram.bin_edges
-            else:
-                raise ValueError("Pass histogram and bin edges arrays")
-
-        self.scipy_dist = scipy_stats.rv_histogram((histogram, bin_edges),)
-        super().__init__(*args, **kwargs)
-
-
 ##
 # Tensorflow / Pytorch support
 ##

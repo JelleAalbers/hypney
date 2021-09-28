@@ -46,7 +46,8 @@ class TransformedDataModel(hypney.WrappedModel):
         self._orig_model = self._orig_model(data=self._data_to_orig())
 
     def _init_quantiles(self):
-        raise NotImplementedError
+        # ppf not implemented yet
+        pass
 
     # Simulation
 
@@ -68,7 +69,7 @@ class TransformedDataModel(hypney.WrappedModel):
         return result
 
     def _ppf(self, params):
-        return self._data_from_orig(self._orig_model._ppf(params))
+        raise NotImplementedError
 
     # Methods not using data
 
