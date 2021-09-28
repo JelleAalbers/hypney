@@ -17,7 +17,7 @@ class LogLikelihood(hypney.Statistic):
 class LikelihoodRatio(hypney.Statistic):
     def __init__(self, model, *args, max_est=None, **kwargs):
         if max_est is None:
-            max_est = hypney.ests.MaximumAndValue
+            max_est = hypney.estimators.MaximumAndValue
         self.max_est = max_est
 
         super().__init__(model=model, *args, **kwargs)

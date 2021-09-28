@@ -9,7 +9,7 @@ class Count(hypney.IndependentStatistic):
         return len(self.data)
 
     def _build_dist(self):
-        return hypney.models.Poisson()
+        return hypney.models.poisson()
 
     def _dist_params(self, params):
         return dict(mu=self.model._rate(params))

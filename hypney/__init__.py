@@ -20,7 +20,7 @@ from .model import *
 from . import models
 
 from .statistic import *
-from . import stats
+from . import statistics
 
 from .estimator import *
-from . import ests
+from . import estimators

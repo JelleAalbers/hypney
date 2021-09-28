@@ -9,7 +9,7 @@ def test_likelihood():
     m = hypney.models.norm(rate=1)
     data = np.array([0,])
 
-    lf = hypney.stats.LogLikelihood(m, data=data)
+    lf = hypney.statistics.LogLikelihood(m, data=data)
     assert len(lf.data) == 1
 
     assert lf() == -1 + stats.norm.logpdf(0)
@@ -22,7 +22,7 @@ def test_lr():
     data = np.array([0,])
 
     # Likelihood with all parameters free
-    lr = hypney.stats.LikelihoodRatio(m, data=data)
+    lr = hypney.statistics.LikelihoodRatio(m, data=data)
 
     # Best fit should be a very sharp Gaussian with rate = 1
     min_scale = m.param_spec_for("scale").min
@@ -43,6 +43,6 @@ def test_lr():
     )
 
     # # Likelihood with only the rate free
-    lr = hypney.stats.LikelihoodRatio(m.fix_except("rate"), data=data)
+    lr = hypney.statistics.LikelihoodRatio(m.fix_except("rate"), data=data)
     assert np.isclose(lr.bestfit["rate"], 1)
     assert len(lr.bestfit) == 1
