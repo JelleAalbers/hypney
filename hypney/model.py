@@ -43,6 +43,7 @@ class Model:
 
     def __init__(
         self,
+        *,
         name="",
         data=None,
         params=NotChanged,  # Really defaults...
@@ -465,6 +466,65 @@ class Model:
 
     def _std(self, params: dict):
         return NotImplementedError
+
+    ##
+    # Plotting
+    ##
+
+    def _plot(self, method, x=None, params=None, auto_labels=True, **kwargs):
+        """Plots differential rate of model"""
+        import matplotlib.pyplot as plt
+        if self.n_dim > 1:
+            raise NotImplementedError("Plotting only implemented for 1d models")
+        if x is None:
+            # Sensible default limits
+            quantiles = np.array([0.01, 0.05, 0.95, 0.99])
+            try:
+                qs = self.ppf(quantiles, params=params)
+            except NotImplementedError:
+                # ppf not implemented, use simulation to estimate range roughly
+                sim_data = self.rvs(size=10_000, params=params)
+                qs = np.percentile(sim_data[:,0], 100 * quantiles)
+            qs = dict(zip(quantiles, qs))
+
+            low = qs[0.01] - 2 * (qs[0.05] - qs[0.01])
+            high = qs[0.99] + 2 * (qs[0.99] - qs[0.95])
+
+            x = np.linspace(low, high, 500)
+
+            if self.observables[0].integer:
+                x = np.unique(np.round(x))
+
+        y = getattr(self, method)(x, params=params)
+        discrete = self.observables[0].integer
+        if discrete:
+            # Use plt.hist rather than a line with drawstyle='steps', to
+            # ensure the extreme bins also get drawn completely
+            kwargs.setdefault('histtype', 'step')
+            offset = 0 if method == 'cdf' else 0.5
+            plt.hist(x, bins=np.concatenate([x - offset, [x[-1] + 1 - offset]]),
+                     weights=y, **kwargs)
+        else:
+            plt.plot(x, y, **kwargs)
+
+        if auto_labels:
+            plt.xlabel(self.observables[0].name)
+            x = self.observables[0].name
+            labels = dict(
+                pdf=f'P({x})' + ('' if discrete else ' d{x}'),
+                cdf=f'Fraction of data below',
+                diff_rate=f'Events' + ('' if discrete else ' / d{x}'),
+            )
+            plt.ylabel(labels[method])
+
+    def plot_pdf(self, x=None, params=None, auto_labels=True, **kwargs):
+        return self._plot('pdf', x=x, params=params, auto_labels=auto_labels, **kwargs)
+
+    def plot_diff_rate(self, x=None, params=None, auto_labels=True, **kwargs):
+        return self._plot('diff_rate', x=x, params=params, auto_labels=auto_labels, **kwargs)
+
+    def plot_cdf(self, x=None, params=None, auto_labels=True, **kwargs):
+        return self._plot('cdf', x=x, params=params, auto_labels=auto_labels, **kwargs)
 
 
 @export
