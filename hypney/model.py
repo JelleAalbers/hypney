@@ -471,6 +471,8 @@ class Model:
 class WrappedModel(Model):
     """A model wrapping another model"""
 
+    _orig_model: Model
+
     def __init__(self, orig_model=hypney.NotChanged, *args, **kwargs):
         if orig_model is not hypney.NotChanged:
             # No need to make a copy now; any attempted state change
@@ -485,32 +487,6 @@ class WrappedModel(Model):
 
     def _init_quantiles(self):
         self._orig_model = self._orig_model(quantiles=self.quantiles)
-
-    def _simulate(self, params):
-        return self._orig_model._simulate(params)
-
-    def _rvs(self, size: int, params: dict):
-        return self._orig_model._rvs(size=size, params=params)
-
-    def _pdf(self, params):
-        return self._orig_model._pdf(params)
-
-    def _cdf(self, params):
-        return self._orig_model._cdf(params)
-
-    def _ppf(self, params):
-        return self._orig_model._ppf(params)
-
-    # Methods not using data
-
-    def _rate(self, params):
-        return self._orig_model._rate(params)
-
-    def _mean(self, params):
-        return self._orig_model._mean(params)
-
-    def _std(self, params: dict):
-        return self._orig_model._std(params)
 
 
 def _merge_dicts(x, y):

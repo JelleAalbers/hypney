@@ -51,32 +51,32 @@ class TransformedDataModel(hypney.WrappedModel):
     # Simulation
 
     def _simulate(self, params):
-        return self._data_from_orig(super()._simulate(params))
+        return self._data_from_orig(self._orig_model._simulate(params))
 
     def _rvs(self, size: int, params: dict):
-        return self._data_from_orig(super()._rvs(size=size, params=params))
+        return self._data_from_orig(self._orig_model._rvs(size=size, params=params))
 
     # Methods using data / quantiles
 
     def _pdf(self, params):
-        return super()._pdf(params) * self._transform_jac_det()
+        return self._orig_model._pdf(params) * self._transform_jac_det()
 
     def _cdf(self, params):
-        result = super()._cdf(params)
+        result = self._orig_model._cdf(params)
         if self.scale < 0:
             result = 1 - result
         return result
 
     def _ppf(self, params):
-        return self._data_from_orig(super()._ppf(params))
+        return self._data_from_orig(self._orig_model._ppf(params))
 
     # Methods not using data
 
     def _rate(self, params):
-        return super()._rate(params)
+        return self._orig_model._rate(params)
 
     def _mean(self, params):
-        return self._data_from_orig(super()._mean(params))
+        return self._data_from_orig(self._orig_model._mean(params))
 
     def _std(self, params: dict):
-        return super()._std(params) * self.scale
+        return self._orig_model._std(params) * self.scale

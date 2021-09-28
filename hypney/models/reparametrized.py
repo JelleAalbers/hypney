@@ -26,27 +26,27 @@ class Reparametrized(hypney.WrappedModel):
     # Simulation
 
     def _simulate(self, params):
-        return super()._simulate(self._transform_params(params))
+        return self._orig_model._simulate(self._transform_params(params))
 
     def _rvs(self, size: int, params: dict):
-        return super()._rvs(size=size, params=self._transform_params(params))
+        return self._orig_model._rvs(size=size, params=self._transform_params(params))
 
     def _pdf(self, params):
-        return super()._pdf(self._transform_params(params))
+        return self._orig_model._pdf(self._transform_params(params))
 
     def _cdf(self, params):
-        return super()._cdf(self._transform_params(params))
+        return self._orig_model._cdf(self._transform_params(params))
 
     def _ppf(self, params):
-        return super()._ppf(self._transform_params(params))
+        return self._orig_model._ppf(self._transform_params(params))
 
     # Methods not using data
 
     def _rate(self, params):
-        return super()._rate(self._transform_params(params))
+        return self._orig_model._rate(self._transform_params(params))
 
     def _mean(self, params):
-        return super()._mean(self._transform_params(params))
+        return self._orig_model._mean(self._transform_params(params))
 
     def _std(self, params: dict):
-        return super()._std(self._transform_params(params))
+        return self._orig_model._std(self._transform_params(params))
