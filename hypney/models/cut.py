@@ -159,7 +159,7 @@ class CutModel(hypney.WrappedModel):
         if self.n_dim > 1:
             raise NotImplementedError("nD cut CDF still todo...")
         c_low, c_high = self._corners_cdf(params)
-        return (self._orig_model._cdf(params) - c_low).clip(0, None) / (c_high - c_low)
+        return ((self._orig_model._cdf(params) - c_low) / (c_high - c_low)).clip(0, 1)
 
     def _ppf(self, params: dict):
         if self.n_dim > 1:
