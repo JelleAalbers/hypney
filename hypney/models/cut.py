@@ -5,6 +5,7 @@ import hypney
 
 import eagerpy as ep
 import numpy as np
+from scipy import stats
 
 export, __all__ = hypney.exporter()
 
@@ -129,9 +130,14 @@ class CutModel(hypney.WrappedModel):
     def _simulate(self, params) -> np.ndarray:
         return self._apply_cut(self._simulate(params))
 
-    def _rvs(self, size) -> np.ndarray:
-        # Simulate significant excess, cut, hope it is enough?
-        raise NotImplementedError
+    def _rvs(self, size, params: dict) -> np.ndarray:
+        # Simulate an excess, enough that we almost always complete in one go
+        n_needed = int(size + stats.nbinom(p=self.cut_efficiency(params), n=size).ppf(1-1e-6))
+        while True:
+            d = self._orig_model.rvs(size=n_needed, params=params)
+            if len(d) >= size:
+                break
+        return d[:size]
 
     # Methods not using data
 
