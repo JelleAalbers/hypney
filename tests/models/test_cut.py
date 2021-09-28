@@ -17,8 +17,8 @@ def test_cut():
     np.testing.assert_almost_equal(m_cut.rate(), 0.5)
     np.testing.assert_almost_equal(m_cut.diff_rate(x), m_half.diff_rate(x) / 2)
 
-    for params in dict(a=0, b=float('inf')), dict(a=-1, b=1):
-        m_cut = m_base.cut(params['a'], params['b'])
+    for params in dict(a=0, b=float("inf")), dict(a=-1, b=1):
+        m_cut = m_base.cut(params["a"], params["b"])
         m_trunc = hypney.models.truncnorm(**params)
         np.testing.assert_almost_equal(m_cut.pdf(x), m_trunc.pdf(x, params))
         np.testing.assert_almost_equal(m_cut.cdf(x), m_trunc.cdf(x, params))

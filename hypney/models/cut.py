@@ -132,7 +132,9 @@ class CutModel(hypney.WrappedModel):
 
     def _rvs(self, size, params: dict) -> np.ndarray:
         # Simulate an excess, enough that we almost always complete in one go
-        n_needed = int(size + stats.nbinom(p=self.cut_efficiency(params), n=size).ppf(1-1e-6))
+        n_needed = int(
+            size + stats.nbinom(p=self.cut_efficiency(params), n=size).ppf(1 - 1e-6)
+        )
         while True:
             d = self._orig_model.rvs(size=n_needed, params=params)
             if len(d) >= size:
