@@ -8,7 +8,7 @@ Hypney Documentation
 
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
     :caption: Models
 
     models/basics
@@ -19,6 +19,8 @@ Hypney Documentation
 .. toctree::
     :maxdepth: 1
     :caption: Reference
+
+    reference/hypney
 
 * :ref:`genindex`
 * :ref:`modindex`

@@ -14,7 +14,7 @@ The ``Model.fix`` method returns a model with fewer parameters than the original
     >>> hp.norm().fix(loc=2, rate=3)
     {'scale': 1.0}
 
-If you want a model with different defaults, but the same parameters instead, call the model:
+If you want a model with different defaults but the same parameters instead, just call the model as described in changing defaults [TODO link]:
 
     >>> hp.norm(loc=3.)
     {'rate': 3.0, 'loc': 0.0, 'scale': 1}

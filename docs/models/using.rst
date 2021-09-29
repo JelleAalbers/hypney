@@ -4,8 +4,6 @@ Using models
 
 Models assign probabilities to events, and simulate new events.
 
-Creating models
-===============
 
 Default parameters
 -------------------
@@ -66,8 +64,8 @@ if the model is sufficiently complex.
 
 
 Changing defaults
-=================
-Models are __immutable__: they don't change after they are created. You cannot change the default parameters or data on an existing model.
+-----------------
+Models are **immutable**: they don't change after they are created. You cannot change the default parameters or data on an existing model.
 
 Instead, you can get new models with different defaults or data from old models, by calling them:
 
@@ -89,7 +87,7 @@ you just make a new model and make the variable ``m`` point to it. The ``m2`` an
 
 
 Model methods
-=============
+--------------
 For all of the methods below, you can specify parameters through keyword arguments, or a ``params=dict(...)`` argument. Omitted parameters revert to their defaults.
 
 The ``pdf`` method returns the probability density or mass function, depending on whether the model has continuous or discrete observables.
@@ -118,7 +116,7 @@ Models also have a ``mean`` and ``std`` method, which return the expected mean a
 
 
 Plotting
-========
+--------
 Hypney includes a small plotting helper to quickly inspect one-dimensional models. You can plot the PDF, CDF, and differential rate of a model:
 
 .. plot::
@@ -134,12 +132,11 @@ Hypney includes a small plotting helper to quickly inspect one-dimensional model
     m.plot_cdf()
     plt.show()
 
-By default, hypney will guess some sensible bounds of the observable. You can specify your own plotting space as the first argument. Other arguments are passed to ``plt.plot`` (or ``plt.hist`` for discrete observables). Passing ``auto_labels=False`` suppresses the default axis labels.
-
+By default, hypney will guess some sensible bounds of the observable. You can specify your own set of datapoints to plot over as the first argument. Other arguments are passed to ``plt.plot`` (or ``plt.hist`` for discrete observables). Passing ``auto_labels=False`` suppresses the default axis labels.
 
 .. plot::
     :include-source: True
     :context: close-figs
 
-    m.plot_diff_rate(np.linspace(-3, 3, 10), marker='o', auto_labels=False)
+    m.plot_diff_rate(np.linspace(-4, 4, 10), marker='o', auto_labels=False)
 
