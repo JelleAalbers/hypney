@@ -20,7 +20,7 @@ def test_filter_params():
 def test_negative_data():
 
     m = hypney.models.uniform()
-    m_flip = m.transformed_data(scale=-1)
+    m_flip = m.shift_and_scale(scale=-1)
 
     assert m_flip.pdf(data=-0.3) == m.pdf(data=0.3)
     assert m_flip.diff_rate(data=-0.3) == m.pdf(data=0.3)

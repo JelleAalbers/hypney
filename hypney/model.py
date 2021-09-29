@@ -124,11 +124,22 @@ class Model:
     def __call__(self, **kwargs):
         return self.set(**kwargs)
 
+    def mix_with(self, *others):
+        return hypney.models.mixture(*((self,) + others))
+
     def __add__(self, other):
-        return hypney.models.Mixture(self, other)
+        return self.mix_with(other)
+
+    def tensor_with(self, *others):
+        return hypney.models.tensor_product(*((self,) + others))
 
     def __pow__(self, other):
-        return hypney.models.TensorProduct(self, other)
+        return self.tensor_with(other)
+
+    def reparametrize(self, transform_params: callable, *args, **kwargs):
+        return hypney.models.Reparametrized(
+            self, transform_params=transform_params, *args, **kwargs
+        )
 
     def set(
         self,
@@ -183,17 +194,27 @@ class Model:
             cut = kwargs
         return hypney.models.CutModel(self, cut)
 
-    def transformed_data(self, shift=0.0, scale=1):
+    def shift_and_scale(self, shift=0.0, scale=1):
         """Return model for data that has been shifted, then scaled,
         by constants.
         """
         return hypney.models.TransformedDataModel(self, shift=shift, scale=scale)
 
+    def shift(self, shift=0.0):
+        """Return model for data that has been shifted
+        """
+        return self.shift_and_scale(shift=shift, scale=1)
+
+    def scale(self, scale=0.0):
+        """Return model for data that has been scaled
+        """
+        return self.shift_and_scale(shift=0, scale=scale)
+
     def normalized_data(self):
         """Return model for data that was normalized using the current model's
         mean and standard deviation.
         """
-        return self.transformed_data(shift=-self.mean(), scale=1 / self.std())
+        return self.shift_and_scale(shift=-self.mean(), scale=1 / self.std())
 
     def fix(self, params=None, **kwargs):
         """Return new model with parameters in fix fixed
@@ -516,9 +537,9 @@ class Model:
             plt.xlabel(self.observables[0].name)
             x = self.observables[0].name
             labels = dict(
-                pdf=f"P({x})" + ("" if discrete else " d{x}"),
+                pdf=f"P({x})" + ("" if discrete else f" d{x}"),
                 cdf=f"Fraction of data below",
-                diff_rate=f"Events" + ("" if discrete else " / d{x}"),
+                diff_rate=f"Events" + ("" if discrete else f" / d{x}"),
             )
             plt.ylabel(labels[method])
 

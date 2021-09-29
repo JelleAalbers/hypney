@@ -97,6 +97,6 @@ class SignedPLR(PLR):
         return dict()
 
     def _build_dist(self):
-        return hypney.models.chi2(df=1, rate=0.5).transformed_data(
+        return hypney.models.chi2(df=1, rate=0.5).shift_and_scale(
             scale=-1
         ) + hypney.models.chi2(df=1, rate=0.5)

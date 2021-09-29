@@ -19,7 +19,7 @@ class AssociativeCombination(hypney.Model):
     # param_mapping   (mname -> (pname in model, pname in combination))
     param_mapping: ty.Dict[str, ty.Tuple[str, str]]
 
-    def __init__(self, *models: hypney.Model):
+    def __init__(self, models: hypney.Model, share=tuple(), **kwargs):
         assert len(models) > 1
 
         # Exploit associativity: if any of the models are combinations of
@@ -38,11 +38,11 @@ class AssociativeCombination(hypney.Model):
         self.observables = self._init_observables()
 
         self.param_specs, self.param_mapping = combine_param_specs(
-            models, self.model_names
+            models, self.model_names, share=share
         )
 
         super().__init__(
-            name=self.__class__.__name__ + "_" + "_".join(self.model_names)
+            name=self.__class__.__name__ + "_" + "_".join(self.model_names), **kwargs
         )
 
     def _init_observables(self):
@@ -226,8 +226,13 @@ class TensorProduct(AssociativeCombination):
 
 
 @export
+def mixture(*models, **kwargs):
+    return Mixture(models, **kwargs)
+
+
+@export
 def combine_param_specs(
-    elements: ty.Sequence[hypney.Model], names=None, share_all=False
+    elements: ty.Sequence[hypney.Model], names=None, share=tuple(),
 ):
     """Return param spec, mapping for new model made of other models
     Mapping is name -> (old name, new name)
@@ -238,6 +243,8 @@ def combine_param_specs(
     """
     if names is None:
         names = [e.name if e.name else str(i) for i, e in enumerate(elements)]
+    if isinstance(share, str):
+        share = (share,)
     all_names = sum([list(m.param_names) for m in elements], [])
     name_count = collections.Counter(all_names)
     unique = [pn for pn, count in name_count.items() if count == 1]
@@ -247,7 +254,7 @@ def combine_param_specs(
     for m, name in zip(elements, names):
         pmap[name] = []
         for p in m.param_specs:
-            if p.name in unique or p.share or share_all:
+            if p.name in unique or p.name in share:
                 pmap[name].append((p.name, p.name))
                 if p.name not in seen:
                     specs.append(p)
@@ -261,3 +268,8 @@ def combine_param_specs(
                     )
                 )
     return tuple(specs), pmap
+
+
+@export
+def tensor_product(*models, **kwargs):
+    return TensorProduct(models, **kwargs)
