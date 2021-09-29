@@ -23,7 +23,6 @@ class Statistic:
     def _set_dist(self, dist: hypney.Model):
         if dist is hypney.NotChanged:
             return
-        print("setting dist")
         if dist is None:
             if hasattr(self, "_build_dist"):
                 # Build a distribution automatically
@@ -113,7 +112,7 @@ class Statistic:
         # Default assumption is that distribution is parameter-free
         return dict()
 
-    def dist_from_toys(self, params=None, n_toys=1000, **kwargs):
+    def dist_from_toys(self, params=None, n_toys=1000, transform=np.asarray, **kwargs):
         """Return an estimated distribution of the statistic given params
         from running simulations.
 
@@ -122,16 +121,18 @@ class Statistic:
         # Use a *lot* of bins by default, since we're most interested
         # in the cdf/ppf
         kwargs.setdefault("bin_count_multiplier", 10)
-        toys = self.rvs(n_toys, params=params)
+        toys = transform(self.rvs(n_toys, params=params))
         dist = hypney.models.from_samples(toys, **kwargs)
         # Remove standard loc/scale/rate params
         # to avoid confusion with model parameters
         return dist.freeze()
 
-    def interpolate_dist_from_toys(self, anchors: dict, **kwargs):
+    def interpolate_dist_from_toys(self, anchors: dict, progress=True, **kwargs):
         assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
         return hypney.models.Interpolation(
-            functools.partial(self.dist_from_toys, **kwargs), anchors
+            functools.partial(self.dist_from_toys, **kwargs),
+            anchors,
+            progress=progress,
         )
 
 

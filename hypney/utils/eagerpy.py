@@ -1,10 +1,12 @@
 import math
+import functools
 import typing as ty
 
 import hypney
 
 import eagerpy as ep
 import numpy as np
+from scipy import special
 
 export, __all__ = hypney.exporter()
 
@@ -32,13 +34,6 @@ def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
     if isinstance(match_type, ep.TensorFlowTensor):
         return ep.tensorflow.convert_to_tensor(x, dtype=match_type.dtype)
     raise ValueError(f"match_type of unknown type {type(match_type)}")
-
-
-def log(x):
-    if isinstance(x, ep.Tensor):
-        return ep.log(x)
-    # Probably a scalar...
-    return math.log(x)
 
 
 @export
@@ -90,8 +85,7 @@ def split(x, *args, **kwargs):
 
 @export
 def tensorlib(x: ep.TensorType):
-    # This looks like
-    if isinstance(x, ep.NumPyTensor):
+    if isinstance(x, ep.NumPyTensor) or x is None:
         return ep.numpy
     elif isinstance(x, ep.PyTorchTensor):
         return ep.torch
@@ -114,3 +108,13 @@ def bucketize(x, p):
     elif isinstance(x, ep.JAXTensor):
         return ep.jax.numpy.searchsorted(p, x)
     raise TypeError(f"Unknown tensor type {x}")
+
+
+@export
+def logsumexp(tensor, axis=0):
+    if isinstance(tensor, ep.NumPyTensor):
+        result = special.logsumexp(tensor.raw, axis=axis)
+        return ep.astensor(np.asarray(result))
+    # TODO: tf/torch/jax only support two-argument function logaddexp.
+    # Do something horrible for now:
+    return ep.log(ep.sum(ep.exp(tensor), axis=axis))

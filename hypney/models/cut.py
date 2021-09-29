@@ -159,7 +159,8 @@ class CutModel(hypney.WrappedModel):
     def _log_pdf(self, params: dict):
         return ep.where(
             self._passes_cut,
-            self._orig_model._logpdf(params) - ep.log(self._cut_efficiency(params)),
+            self._orig_model._logpdf(params)
+            - self._tensorlib.log(self._cut_efficiency(params)),
             -float("inf"),
         )
 

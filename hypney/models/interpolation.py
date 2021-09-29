@@ -27,6 +27,7 @@ class Interpolation(hypney.Model):
         # Called with params, outputs model
         model_builder: callable,
         param_specs: ty.Union[tuple, dict],
+        progress=False,
         *args,
         standardize=False,
         **kwargs
@@ -47,15 +48,32 @@ class Interpolation(hypney.Model):
                 ]
             )
 
-        # Create the grid of anchor models
-        # TODO: support lazy map / multiprocessing? Progress bar?
-        # Star morphing?
-        # Some way for user to extend this?
         param_names = [p.name for p in param_specs]
         anchor_values = [p.anchors for p in param_specs if p.anchors]
+        anchor_grid = list(itertools.product(*anchor_values))
+
+        # Use a progress bar if desired.
+        # TODO: does not belong here, put in utils or something
+        if progress is True:
+            try:
+                from tqdm import tqdm
+
+                progress_iter = tqdm
+            except ImportError:
+                progress_iter = False
+        elif progress:
+            # user may have passed a custom tqdm, e.g. tqdm.notebook
+            progress_iter = partial(progress, desc="Building models")
+        else:
+            progress_iter = lambda x: x
+
+        # Create the grid of anchor models
+        # TODO: support lazy map / multiprocessing? Unify with progress bar?
+        # Star morphing?
+        # Some way for user to extend this?
         self.anchor_models = {
             anchor_vals: model_builder(dict(zip(param_names, anchor_vals)))
-            for anchor_vals in itertools.product(*anchor_values)
+            for anchor_vals in progress_iter(anchor_grid)
         }
         self._some_model = next(iter(self.anchor_models.values()))
 

@@ -5,15 +5,16 @@ import hypney
 
 
 def test_likelihood():
-    # Single event at x=0
+    # Five events at x=0
     m = hypney.models.norm(rate=1)
-    data = np.array([0,])
+    data = np.array([0, 0, 0, 0, 0])
 
     lf = hypney.statistics.LogLikelihood(m, data=data)
-    assert len(lf.data) == 1
+    assert len(lf.data) == 5
 
-    assert lf() == -1 + stats.norm.logpdf(0)
-    assert lf(params=dict(rate=2)) == -2 + np.log(2 * stats.norm.pdf(0))
+    assert lf() == -1 + 5 * stats.norm.logpdf(0)
+
+    assert lf(params=dict(rate=2)) == -2 + 5 * np.log(2 * stats.norm.pdf(0))
 
 
 def test_lr():

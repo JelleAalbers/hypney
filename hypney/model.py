@@ -458,7 +458,7 @@ class Model:
 
     def _log_diff_rate(self, params: dict):
         if self._has_redefined("_logpdf"):
-            return self._logpdf(params=params) - self._log_rate(params=params)
+            return self._logpdf(params=params) + self._log_rate(params=params)
         return ep.log(self._diff_rate(params=params))
 
     def diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
@@ -519,9 +519,12 @@ class Model:
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
+    @property
+    def _tensorlib(self):
+        return hypney.utils.eagerpy.tensorlib(self.data)
+
     def _log_rate(self, params: dict):
-        # The rate is probably a scalar, eagerpy does not like that
-        return hypney.utils.eagerpy.log(self.rate(params))
+        return self._tensorlib.log(self.rate(params))
 
     def mean(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)

@@ -8,9 +8,16 @@ export, __all__ = hypney.exporter()
 @export
 class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
-        return -self.model._rate(params) + ep.sum(
-            ep.log(self.model._diff_rate(params=params))
+        result = -self.model._rate(params) + ep.sum(
+            self.model._log_diff_rate(params=params)
         )
+        # old = -self.model._rate(params) + ep.sum(
+        #     ep.log(self.model._diff_rate(params=params))
+        # )
+        # Somehow the scipy optimizer is fine with -inf,
+        # but not with an accurate but insanely large value??
+        # TODO: madness. Investigate.
+        return ep.where(result < -1e5, result * float("inf"), result)
 
 
 @export
@@ -31,7 +38,7 @@ class LikelihoodRatio(hypney.Statistic):
         return -2 * (self.ll._compute(params=params) - self.ll_bestfit)
 
     def _build_dist(self):
-        return hypney.models.chi2(df=len(self.model.param_names))
+        return hypney.models.chi2(df=len(self.model.param_names)).freeze()
 
 
 @export

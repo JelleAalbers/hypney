@@ -39,7 +39,9 @@ def test_uniform():
     np.testing.assert_array_equal(m.ppf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
 
     # Test diff rate
-    assert m.diff_rate(0.0) == 0.0
+    m = hypney.models.uniform(rate=2)
+    assert m.diff_rate(0.0) == 2.0
+    assert m.log_diff_rate(0.0) == np.log(2.0)
 
     # Test mean and std
     assert m.mean() == 0.5
