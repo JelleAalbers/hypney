@@ -7,6 +7,7 @@ import numpy as np
 
 import hypney
 from hypney import NotChanged
+from hypney.utils.eagerpy import ensure_raw
 
 export, __all__ = hypney.exporter()
 
@@ -18,6 +19,9 @@ class Model:
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     data: ep.Tensor = None
     quantiles: ep.Tensor = None
+
+    _data_is_single_scalar = False
+    _quantiles_is_single_scalar = False
 
     def param_spec_for(self, pname):
         for p in self.param_specs:
@@ -299,6 +303,7 @@ class Model:
             len(data)
         except TypeError:
             # Int/float like
+            self._data_is_single_scalar = True
             data = [data]
         if isinstance(data, (list, tuple)):
             if self.data is None:
@@ -328,6 +333,7 @@ class Model:
         try:
             len(quantiles)
         except TypeError:
+            self._quantiles_is_single_scalar = True
             quantiles = [quantiles]
         if isinstance(quantiles, (list, tuple)):
             if self.data is None:
@@ -393,32 +399,45 @@ class Model:
     #       Flexible input, returm value has same type as data.
     ##
 
+    # TODO: make these decorators? See if pickle is OK with that..
+    def _return_like_data(self, result):
+        if self._data_is_single_scalar:
+            return result.item()
+        return result
+
+    def _return_like_quantiles(self, result):
+        if self._quantiles_is_single_scalar:
+            return result.item()
+        return result
+
     def logpdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.logpdf_(data=data, params=params, **kwargs).raw
+        return ensure_raw(self.logpdf_(data=data, params=params, **kwargs))
 
     def logpdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
         self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
-        return self._logpdf(params)
+        return self._return_like_data(self._logpdf(params))
 
     def _logpdf(self, params: dict):
         if self._has_redefined("_log_diff_rate"):
             return self._log_diff_rate(params) - self._log_rate(params)
-        if (self._has_redefined("_pdf") or self._has_redefined("_diff_rate")):
+        if self._has_redefined("_pdf") or self._has_redefined("_diff_rate"):
             return ep.log(self._pdf(params))
-        raise NotImplementedError("Model should implement _pdf, _logpdf, _diff_rate or _log_diff_rate")
+        raise NotImplementedError(
+            "Model should implement _pdf, _logpdf, _diff_rate or _log_diff_rate"
+        )
 
     def pdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.pdf_(data=data, params=params, **kwargs).raw
+        return ensure_raw(self.pdf_(data=data, params=params, **kwargs))
 
     def pdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
         self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
-        return self._pdf(params)
+        return self._return_like_data(self._pdf(params))
 
     def _pdf(self, params: dict):
         if self._has_redefined("_diff_rate"):
@@ -426,7 +445,7 @@ class Model:
         return ep.exp(self._logpdf(params))
 
     def log_diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.log_diff_rate_(data=data, params=params, **kwargs).raw
+        return ensure_raw(self.log_diff_rate_(data=data, params=params, **kwargs))
 
     def log_diff_rate_(
         self, data=NotChanged, params: dict = None, **kwargs
@@ -435,7 +454,7 @@ class Model:
         self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
-        return self._log_diff_rate(params)
+        return self._return_like_data(self._log_diff_rate(params))
 
     def _log_diff_rate(self, params: dict):
         if self._has_redefined("_logpdf"):
@@ -443,7 +462,7 @@ class Model:
         return ep.log(self._diff_rate(params=params))
 
     def diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.diff_rate_(data=data, params=params, **kwargs).raw
+        return ensure_raw(self.diff_rate_(data=data, params=params, **kwargs))
 
     def diff_rate_(
         self, data=NotChanged, params: dict = None, **kwargs
@@ -452,7 +471,7 @@ class Model:
         self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
-        return self._diff_rate(params)
+        return self._return_like_data(self._diff_rate(params))
 
     def _diff_rate(self, params: dict):
         if self._has_redefined("_pdf"):
@@ -460,20 +479,20 @@ class Model:
         return ep.exp(self._log_diff_rate(params=params))
 
     def cdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.cdf_(data=data, params=params, **kwargs).raw
+        return ensure_raw(self.cdf_(data=data, params=params, **kwargs))
 
     def cdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         params = self.validate_params(params, **kwargs)
         self = self(data=data)
         if self.data is None:
             raise ValueError("Provide data")
-        return self._cdf(params)
+        return self._return_like_data(self._cdf(params))
 
     def _cdf(self, params: dict):
         raise NotImplementedError
 
     def ppf(self, quantiles=NotChanged, params: dict = None, **kwargs):
-        return self.ppf_(quantiles=quantiles, params=params, **kwargs).raw
+        return ensure_raw(self.ppf_(quantiles=quantiles, params=params, **kwargs))
 
     def ppf_(
         self, quantiles=NotChanged, params: dict = None, **kwargs
@@ -482,7 +501,7 @@ class Model:
         self = self(quantiles=quantiles)
         if self.quantiles is None:
             raise ValueError("Provide quantiles")
-        return self._ppf(params)
+        return self._return_like_quantiles(self._ppf(params))
 
     def _ppf(self, params: dict):
         raise NotImplementedError
@@ -501,7 +520,8 @@ class Model:
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
     def _log_rate(self, params: dict):
-        return ep.log(self.rate(params))
+        # The rate is probably a scalar, eagerpy does not like that
+        return hypney.utils.eagerpy.log(self.rate(params))
 
     def mean(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)

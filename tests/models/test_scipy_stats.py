@@ -29,6 +29,9 @@ def test_uniform():
     assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
     assert m.pdf(0) == 1.0
 
+    # Ensure we don't get back whacky types (0-element arrays, ep-wrapped scalars)
+    assert isinstance(m.pdf(0), (float, np.float64))
+
     assert m.logpdf(0) == stats.uniform().logpdf(0)
 
     # Test cdf and ppf
