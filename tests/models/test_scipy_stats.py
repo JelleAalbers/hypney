@@ -29,6 +29,8 @@ def test_uniform():
     assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
     assert m.pdf(0) == 1.0
 
+    assert m.logpdf(0) == stats.uniform().logpdf(0)
+
     # Test cdf and ppf
     np.testing.assert_array_equal(m.cdf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
     np.testing.assert_array_equal(m.ppf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))

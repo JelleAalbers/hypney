@@ -21,6 +21,7 @@ def test_cut():
         m_cut = m_base.cut(params["a"], params["b"])
         m_trunc = hypney.models.truncnorm(**params)
         np.testing.assert_almost_equal(m_cut.pdf(x), m_trunc.pdf(x, params))
+        np.testing.assert_almost_equal(m_cut.logpdf(x), m_trunc.logpdf(x, params))
         np.testing.assert_almost_equal(m_cut.cdf(x), m_trunc.cdf(x, params))
 
         q = np.linspace(0, 1, 100)

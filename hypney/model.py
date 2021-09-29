@@ -393,6 +393,55 @@ class Model:
     #       Flexible input, returm value has same type as data.
     ##
 
+    def logpdf(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.logpdf_(data=data, params=params, **kwargs).raw
+
+    def logpdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        params = self.validate_params(params, **kwargs)
+        self = self(data=data)
+        if self.data is None:
+            raise ValueError("Provide data")
+        return self._logpdf(params)
+
+    def _logpdf(self, params: dict):
+        if self._has_redefined("_log_diff_rate"):
+            return self._log_diff_rate(params) - self._log_rate(params)
+        if (self._has_redefined("_pdf") or self._has_redefined("_diff_rate")):
+            return ep.log(self._pdf(params))
+        raise NotImplementedError("Model should implement _pdf, _logpdf, _diff_rate or _log_diff_rate")
+
+    def pdf(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.pdf_(data=data, params=params, **kwargs).raw
+
+    def pdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        params = self.validate_params(params, **kwargs)
+        self = self(data=data)
+        if self.data is None:
+            raise ValueError("Provide data")
+        return self._pdf(params)
+
+    def _pdf(self, params: dict):
+        if self._has_redefined("_diff_rate"):
+            return self._diff_rate(params) / self._rate(params)
+        return ep.exp(self._logpdf(params))
+
+    def log_diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
+        return self.log_diff_rate_(data=data, params=params, **kwargs).raw
+
+    def log_diff_rate_(
+        self, data=NotChanged, params: dict = None, **kwargs
+    ) -> ep.TensorType:
+        params = self.validate_params(params, **kwargs)
+        self = self(data=data)
+        if self.data is None:
+            raise ValueError("Provide data")
+        return self._log_diff_rate(params)
+
+    def _log_diff_rate(self, params: dict):
+        if self._has_redefined("_logpdf"):
+            return self._logpdf(params=params) - self._log_rate(params=params)
+        return ep.log(self._diff_rate(params=params))
+
     def diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
         return self.diff_rate_(data=data, params=params, **kwargs).raw
 
@@ -406,31 +455,9 @@ class Model:
         return self._diff_rate(params)
 
     def _diff_rate(self, params: dict):
-        if not self._has_redefined("_pdf"):
-            raise NotImplementedError(
-                "Can't compute pdf of a Model implementing "
-                "neither _pdf nor _diff_rate"
-            )
-        return self._pdf(params=params) * self._rate(params=params)
-
-    def pdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.pdf_(data=data, params=params, **kwargs).raw
-
-    def pdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
-        params = self.validate_params(params, **kwargs)
-        self = self(data=data)
-        if self.data is None:
-            raise ValueError("Provide data")
-        return self._pdf(params)
-
-    # TODO: test _has_redefined error is raised
-    def _pdf(self, params: dict):
-        if not self._has_redefined("_diff_rate"):
-            raise NotImplementedError(
-                "Can't compute pdf of a Model implementing "
-                "neither _pdf nor _diff_rate"
-            )
-        return self._diff_rate(params) / self._rate(params)
+        if self._has_redefined("_pdf"):
+            return self._pdf(params=params) * self._rate(params=params)
+        return ep.exp(self._log_diff_rate(params=params))
 
     def cdf(self, data=NotChanged, params: dict = None, **kwargs):
         return self.cdf_(data=data, params=params, **kwargs).raw
@@ -472,6 +499,9 @@ class Model:
 
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
+
+    def _log_rate(self, params: dict):
+        return ep.log(self.rate(params))
 
     def mean(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)

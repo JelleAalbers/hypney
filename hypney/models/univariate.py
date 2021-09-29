@@ -89,6 +89,11 @@ class UnivariateDistribution(hypney.Model):
             )
         return self._dists["scipy"].rvs(size=size, **self._dist_params(params))[:, None]
 
+    def _logpdf(self, params: dict) -> ep.TensorType:
+        dist = self.dist_for_data()
+        logpdf = dist.logpdf if hasattr(dist, "logpdf") else dist.logpmf
+        return ep.astensor(logpdf(self.data[:, 0].raw, **self._dist_params(params)))
+
     def _pdf(self, params: dict) -> ep.TensorType:
         dist = self.dist_for_data()
         pdf = dist.pdf if hasattr(dist, "pdf") else dist.pmf

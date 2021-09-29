@@ -94,6 +94,8 @@ class Mixture(AssociativeCombination):
     # Methods using data / quantiles
     ##
 
+    # TODO: logpdf
+
     def _pdf(self, params: dict) -> ep.TensorType:
         return hypney.utils.eagerpy.average_axis0(
             ep.stack(
@@ -204,6 +206,14 @@ class TensorProduct(AssociativeCombination):
         # TODO: remove default rate param from later models
         m, ps = next(self._iter_models_params(params))
         return m._rate(ps)
+
+    def _logpdf(self, params: dict):
+        return ep.sum(
+            ep.stack(
+                [m._logpdf(ps) for m, ps in self._iter_models_params(params)], axis=0
+            ),
+            axis=0,
+        )
 
     def _pdf(self, params: dict):
         return ep.prod(

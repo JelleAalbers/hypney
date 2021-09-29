@@ -62,6 +62,12 @@ class TransformedDataModel(hypney.WrappedModel):
     def _pdf(self, params):
         return self._orig_model._pdf(params) * self._transform_jac_det()
 
+    def _logpdf(self, params):
+        # Careful with log, the jac_det may be a scalar and confuse eagerpy
+        return self._orig_model._logpdf(params) + hypney.utils.eagerpy.log(
+            self._transform_jac_det()
+        )
+
     def _cdf(self, params):
         result = self._orig_model._cdf(params)
         if self.scale < 0:

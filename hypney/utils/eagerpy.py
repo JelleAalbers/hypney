@@ -1,3 +1,4 @@
+import math
 import typing as ty
 
 import hypney
@@ -31,6 +32,13 @@ def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
     if isinstance(match_type, ep.TensorFlowTensor):
         return ep.tensorflow.convert_to_tensor(x, dtype=match_type.dtype)
     raise ValueError(f"match_type of unknown type {type(match_type)}")
+
+
+def log(x):
+    if isinstance(x, ep.Tensor):
+        return ep.log(x)
+    # Probably a scalar...
+    return math.log(x)
 
 
 @export

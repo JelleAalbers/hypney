@@ -31,6 +31,11 @@ class Reparametrized(hypney.WrappedModel):
     def _rvs(self, size: int, params: dict):
         return self._orig_model._rvs(size=size, params=self._transform_params(params))
 
+    # Methods using data
+
+    def _logpdf(self, params):
+        return self._orig_model._logpdf(self._transform_params(params))
+
     def _pdf(self, params):
         return self._orig_model._pdf(self._transform_params(params))
 

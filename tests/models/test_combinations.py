@@ -1,6 +1,7 @@
 import hypney
 
 import numpy as np
+from scipy import stats
 
 
 def test_mixture():
@@ -57,7 +58,10 @@ def test_tensor_product():
     data = np.array([[0, 0, 0], [1, 1, 1]])
 
     np.testing.assert_array_equal(prod.pdf(data=data), np.array([1, 1]))
-    np.testing.assert_array_equal(prod.cdf(data=data), np.array([0, 1]))
+
+    np.testing.assert_array_equal(
+        prod.logpdf(data=data), stats.uniform().logpdf(0) ** 3
+    )
 
     assert prod.rate() == 40.0
     data = prod.simulate()

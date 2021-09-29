@@ -18,7 +18,7 @@ class Interpolation(hypney.Model):
     use one of these; the other two will generally be inconsistent!
     """
 
-    data_methods_to_interpolate = "pdf cdf diff_rate".split()
+    data_methods_to_interpolate = "pdf logpdf cdf diff_rate".split()
     other_methods_to_interpolate = "rate mean std".split()
     anchor_models: ty.Dict[tuple, hypney.Model]
 
