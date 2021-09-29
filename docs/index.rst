@@ -11,8 +11,8 @@ Hypney Documentation
     :maxdepth: 1
     :caption: Models
 
-    models/using
     models/basics
+    models/using
     models/building
     models/custom
 

@@ -1,5 +1,6 @@
+*************
 Basic models
-=============
+*************
 
 You can use analytic probability distributions and histograms as basic models, described below.
 
