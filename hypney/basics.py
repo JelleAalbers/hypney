@@ -39,7 +39,9 @@ class ParameterSpec(ty.NamedTuple):
 
 DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0.0, max=float("inf"), default=1.0)
 DEFAULT_LOC_PARAM = ParameterSpec(name="loc", min=-float("inf"))
-DEFAULT_SCALE_PARAM = ParameterSpec(name="scale", min=1e-6, max=float("inf"), default=1.0)
+DEFAULT_SCALE_PARAM = ParameterSpec(
+    name="scale", min=1e-6, max=float("inf"), default=1.0
+)
 
 RATE_LOC_PARAMS = (DEFAULT_RATE_PARAM, DEFAULT_LOC_PARAM)
 RATE_LOC_SCALE_PARAMS = RATE_LOC_PARAMS + (DEFAULT_SCALE_PARAM,)

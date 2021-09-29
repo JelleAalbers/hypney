@@ -235,7 +235,7 @@ class Model:
 
     def fix_except(self, keep=tuple()):
         """Return new model with only parameters named in keep;
-        other paramters will be fixed to their defaults.
+        other parameters will be fixed to their defaults.
 
         Args:
          - keep: sequence of parameters that should remain
@@ -243,6 +243,12 @@ class Model:
         if isinstance(keep, str):
             keep = (keep,)
         return self.fix([pname for pname in self.param_names if pname not in keep])
+
+    def freeze(self, keep=tuple()):
+        """Return new model that takes no parameters.
+        All parameters are fixed to their defaults
+        """
+        return self.fix_except()
 
     def _fix(self, fix):
         fix = self.validate_params(fix, set_defaults=False)

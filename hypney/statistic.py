@@ -17,17 +17,24 @@ class Statistic:
 
     def __init__(self, model: hypney.Model, data=hypney.NotChanged, dist=None):
         self.model = model
+        self._set_dist(dist)
+        self._set_data(data)
 
+    def _set_dist(self, dist: hypney.Model):
+        if dist is hypney.NotChanged:
+            return
+        print("setting dist")
         if dist is None:
             if hasattr(self, "_build_dist"):
+                # Build a distribution automatically
                 self.dist = hypney.models.Reparametrized(
                     self._build_dist(),
                     transform_params=self._dist_params,
                     param_specs=self.model.param_specs,
                 )
         else:
-            # Distribution passed by user. Make it take all model params,
-            # and ignore ones it does not depend on.
+            # Use the distribution passed by the user.
+            # Make it take the model params, then ignore ones it does not depend on.
             filter_params = functools.partial(
                 _filter_params, allowed_names=dist.param_names
             )
@@ -36,8 +43,6 @@ class Statistic:
                 transform_params=filter_params,
                 param_specs=self.model.param_specs,
             )
-
-        self._set_data(data)
 
     def _set_data(self, data):
         if data is not hypney.NotChanged:
@@ -50,11 +55,6 @@ class Statistic:
     def data(self) -> ep.Tensor:
         return self.model.data
 
-    def _dist_params(self, params):
-        """Return distribution params given model params"""
-        # Default assumption is that distribution is parameter-free
-        return dict()
-
     def validate_data(self, data):
         return self.model.validate_data(data)
 
@@ -62,12 +62,13 @@ class Statistic:
         """Initialize self.data (either from construction or data change)"""
         pass
 
-    def set(self, data=NotChanged):
-        """Return a statistic with possibly changed data"""
-        if data is NotChanged:
+    def set(self, data=NotChanged, dist=NotChanged):
+        """Return a statistic with possibly changed data or distribution"""
+        if data is NotChanged and dist is NotChanged:
             return self
         new_self = copy(self)
         new_self._set_data(data)
+        new_self._set_dist(dist)
         return new_self
 
     def __call__(self, data=NotChanged, params: dict = None, **kwargs):
@@ -104,6 +105,34 @@ class Statistic:
             sim_data = transform(self.model._simulate(params=params))
             results[i] = self.compute(data=sim_data, params=params)
         return results
+
+    ## Distribution
+
+    def _dist_params(self, params):
+        """Return distribution params given model params"""
+        # Default assumption is that distribution is parameter-free
+        return dict()
+
+    def dist_from_toys(self, params=None, n_toys=1000, **kwargs):
+        """Return an estimated distribution of the statistic given params
+        from running simulations.
+
+        Note: kwargs are passed to hypney.models.from_samples, pass params as dict!
+        """
+        # Use a *lot* of bins by default, since we're most interested
+        # in the cdf/ppf
+        kwargs.setdefault("bin_count_multiplier", 10)
+        toys = self.rvs(n_toys, params=params)
+        dist = hypney.models.from_samples(toys, **kwargs)
+        # Remove standard loc/scale/rate params
+        # to avoid confusion with model parameters
+        return dist.freeze()
+
+    def interpolate_dist_from_toys(self, anchors: dict, **kwargs):
+        assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
+        return hypney.models.Interpolation(
+            functools.partial(self.dist_from_toys, **kwargs), anchors
+        )
 
 
 @export
