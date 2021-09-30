@@ -5,7 +5,7 @@ export, __all__ = hypney.exporter()
 
 @export
 class Count(hypney.IndependentStatistic):
-    def _compute(self):
+    def _compute(self, params):
         return len(self.data)
 
     def _build_dist(self):

@@ -45,6 +45,14 @@ def ensure_raw(x):
 
 
 @export
+def ensure_numpy(x):
+    try:
+        return x.numpy()
+    except AttributeError:
+        return x
+
+
+@export
 def ensure_numpy_float(x):
     if isinstance(x, ep.Tensor):
         x = x.numpy()

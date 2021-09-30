@@ -103,7 +103,9 @@ class Statistic:
         return self.compute(data=data, params=params, **kwargs)
 
     def compute(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.compute_(data=data, params=params, **kwargs).raw
+        return hypney.utils.eagerpy.ensure_raw(
+            self.compute_(data=data, params=params, **kwargs)
+        )
 
     def compute_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         self = self.set(data)
@@ -187,17 +189,25 @@ class IndependentStatistic(Statistic):
 
     def _init_data(self):
         # Precompute result on the data.
-        self._result = self._compute()
+        self._result = self._compute(None)
         super()._init_data()
 
-    def compute(self, params: dict = None, data=NotChanged):
+    def compute_(self, params: dict = None, data=NotChanged, **kwargs):
         self = self.set(data)
         if self.data is None:
             raise ValueError("Must provide data")
-        return self._result
 
-    def _compute(self):
-        raise NotImplementedError
+        # If one of the params is a vector, we have to return a vector
+        params = self.model.validate_params(params, **kwargs)
+        for x in list(params.values()):
+            try:
+                len(x)
+            except TypeError:
+                continue
+            else:
+                return self._result * self.model.data.ones(len(x))
+
+        return self._result
 
 
 def _filter_params(params, allowed_names):

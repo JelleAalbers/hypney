@@ -20,9 +20,13 @@ def test_likelihood():
         lf(params=dict(rate=2)), -2 + 5 * np.log(2 * stats.norm.pdf(0))
     )
 
+    # Test vectorization
+    rates = np.linspace(0.1, 10, 10)
+    np.testing.assert_equal(lf(rate=rates), np.array([lf(rate=x) for x in rates]))
+
 
 def test_lr():
-    # Single event at x=0
+    # One event at x=0
     m = hypney.models.norm(rate=1)
     data = np.array([0,])
 
@@ -47,7 +51,7 @@ def test_lr():
         ),
     )
 
-    # # Likelihood with only the rate free
+    # Likelihood with only the rate free
     lr = hypney.statistics.LikelihoodRatio(m.fix_except("rate"), data=data)
-    assert np.isclose(lr.bestfit["rate"], 1)
     assert len(lr.bestfit) == 1
+    assert np.isclose(lr.bestfit["rate"], 1)
