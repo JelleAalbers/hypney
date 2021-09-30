@@ -59,7 +59,9 @@ class UnivariateDistribution(hypney.Model):
                     f"{self.__class__.__name__} distribution not available in PyTorch"
                 )
             result = TorchDistributionWrapper(
-                getattr(torch.distributions, self.torch_name), self.defaults
+                getattr(torch.distributions, self.torch_name),
+                defaults=self.defaults,
+                transform=self.torch_param_transform,
             )
 
         elif modname == "tensorflow":
@@ -70,7 +72,9 @@ class UnivariateDistribution(hypney.Model):
                     f"{self.__class__.__name__} distribution not available in TensorFlow Probability"
                 )
             result = TFPDistributionWrapper(
-                getattr(tfp.distributions, self.tfp_name), self.defaults
+                getattr(tfp.distributions, self.tfp_name),
+                defaults=self.defaults,
+                transform=self.tf_param_transform,
             )
 
         else:
@@ -78,6 +82,12 @@ class UnivariateDistribution(hypney.Model):
 
         self._dists[modname] = result
         return result
+
+    def torch_param_transform(self, params):
+        return params
+
+    def tf_param_transform(self, params):
+        return self.torch_param_transform(params)
 
     # Methods using data / quantiles
 
@@ -133,15 +143,20 @@ class TorchDistributionWrapper:
     including data scaling for distributions not taking loc and scale
     """
 
-    def __init__(self, dist, default_params):
+    def __init__(self, dist, defaults, transform):
         self.dist = dist
-        self.default_params = default_params
+        self.defaults = transform(defaults)
+        self.transform = transform
 
-        sig_params = inspect.signature(dist).parameters
-        self.patch_loc = ("loc" in default_params) and ("loc" not in sig_params)
-        self.patch_scale = ("scale" in default_params) and ("scale" not in sig_params)
+        signature_params = inspect.signature(dist).parameters
+        self.patch_loc = ("loc" in self.defaults) and ("loc" not in signature_params)
+        self.patch_scale = ("scale" in self.defaults) and (
+            "scale" not in signature_params
+        )
 
     def _patch_params(self, params, data_tensor):
+        params = self.transform(params)
+
         if self.patch_loc:
             x0 = params["loc"]
             params = {k: v for k, v in params.items() if k != "loc"}
@@ -162,6 +177,15 @@ class TorchDistributionWrapper:
         # For pytorch, casting param values to tensors explicitly
         # seems not to be needed. It doesn't improve speed either.
         return params
+
+    def logpdf(self, data, **params):
+        import torch
+
+        params, x0, x_scale = self._patch_params(params, data)
+        return (
+            self.dist(**params).log_prob((data - x0) / x_scale)
+            - torch.tensor(x_scale).log()
+        )
 
     def pdf(self, data, **params):
         params, x0, x_scale = self._patch_params(params, data)
@@ -197,6 +221,12 @@ class TFPDistributionWrapper(TorchDistributionWrapper):
             k: tf.convert_to_tensor(v, dtype=data_tensor.dtype)
             for k, v in params.items()
         }
+
+    def logpdf(self, data, **params):
+        import tensorflow as tf
+
+        params, x0, x_scale = self._patch_params(params, data)
+        return self.dist(**params).log_prob((data - x0) / x_scale) - tf.log(x_scale)
 
     def pdf(self, data, **params):
         params, x0, x_scale = self._patch_params(params, data)

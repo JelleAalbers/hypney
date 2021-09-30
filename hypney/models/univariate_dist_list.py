@@ -2837,6 +2837,11 @@ class uniform(UnivariateDistribution):
     torch_name = "Uniform"
     tfp_name = "Uniform"
 
+    ### CUSTOM!
+    ### TODO: preserve on autogeneration
+    def torch_param_transform(self, params):
+        return dict(low=params["loc"], high=params["loc"] + params["scale"])
+
 
 @export
 class vonmises(UnivariateDistribution):

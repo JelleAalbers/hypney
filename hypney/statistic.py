@@ -1,5 +1,6 @@
 from copy import copy
 import functools
+import warnings
 
 import eagerpy as ep
 import numpy as np
@@ -15,13 +16,29 @@ class Statistic:
     model: hypney.Model  # Model of the data
     dist: hypney.Model = None  # Model of the statistic; takes same parameters
 
-    def __init__(self, model: hypney.Model, data=hypney.NotChanged, dist=None):
+    ##
+    # Initialization
+    ##
+
+    def __init__(
+        self,
+        model: hypney.Model,
+        data=NotChanged,
+        params=NotChanged,
+        dist=None,
+        **kwargs,
+    ):
         self.model = model
         self._set_dist(dist)
+        if data is NotChanged:
+            # Do not bypass _set_data; if the model has data,
+            # we'll want to run _init_data on it
+            data = self.model.data
         self._set_data(data)
+        self._set_defaults(params, **kwargs)
 
     def _set_dist(self, dist: hypney.Model):
-        if dist is hypney.NotChanged:
+        if dist is NotChanged:
             return
         if dist is None:
             if hasattr(self, "_build_dist"):
@@ -44,31 +61,43 @@ class Statistic:
             )
 
     def _set_data(self, data):
-        if data is not hypney.NotChanged:
-            self.model = self.model(data=data)
-        # self.data is just self.model.data, see below
-        if self.data is not None:
+        if data is NotChanged:
+            return
+        self.model = self.model(data=data)
+        if self.model.data is not None:
             self._init_data()
-
-    @property
-    def data(self) -> ep.Tensor:
-        return self.model.data
-
-    def validate_data(self, data):
-        return self.model.validate_data(data)
 
     def _init_data(self):
         """Initialize self.data (either from construction or data change)"""
         pass
 
-    def set(self, data=NotChanged, dist=NotChanged):
+    @property
+    def data(self) -> ep.Tensor:
+        return self.model.data
+
+    def _set_defaults(self, params=NotChanged, **kwargs):
+        if params is NotChanged and not len(kwargs):
+            return
+        self.model = self.model(params=params, **kwargs)
+
+    def set(self, data=NotChanged, dist=NotChanged, params=NotChanged, **kwargs):
         """Return a statistic with possibly changed data or distribution"""
-        if data is NotChanged and dist is NotChanged:
+        if (
+            data is NotChanged
+            and dist is NotChanged
+            and params is NotChanged
+            and not kwargs
+        ):
             return self
         new_self = copy(self)
-        new_self._set_data(data)
+        new_self._set_defaults(params, **kwargs)
         new_self._set_dist(dist)
+        new_self._set_data(data)
         return new_self
+
+    ##
+    # Computation
+    ##
 
     def __call__(self, data=NotChanged, params: dict = None, **kwargs):
         return self.compute(data=data, params=params, **kwargs)
@@ -87,6 +116,10 @@ class Statistic:
     def _compute(self, params):
         raise NotImplementedError
 
+    ##
+    # Simulation
+    ##
+
     def rvs(self, size=1, params=None, transform=np.asarray, **kwargs) -> np.ndarray:
         """Return statistic evaluated on simulated data,
         generated from model with params
@@ -102,10 +135,16 @@ class Statistic:
         results = np.zeros(size)
         for i in range(size):
             sim_data = transform(self.model._simulate(params=params))
-            results[i] = self.compute(data=sim_data, params=params)
+            try:
+                results[i] = self.compute(data=sim_data, params=params)
+            except Exception as e:
+                warnings.warn(f"Exception during test statistic evaluation: {e}")
+                results[i] = float("nan")
         return results
 
-    ## Distribution
+    ##
+    # Distribution
+    ##
 
     def _dist_params(self, params):
         """Return distribution params given model params"""
@@ -121,7 +160,8 @@ class Statistic:
         # Use a *lot* of bins by default, since we're most interested
         # in the cdf/ppf
         kwargs.setdefault("bin_count_multiplier", 10)
-        toys = transform(self.rvs(n_toys, params=params))
+        # Set defaults before simulation; helps provide e.g. better minimizer guesses
+        toys = self.set(params=params).rvs(n_toys, transform=transform)
         dist = hypney.models.from_samples(toys, **kwargs)
         # Remove standard loc/scale/rate params
         # to avoid confusion with model parameters

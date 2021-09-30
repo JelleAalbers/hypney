@@ -1,10 +1,10 @@
-import hypney
-
-from .univariate import UnivariateDistribution
+import warnings
 
 import numpy as np
 from scipy import stats
 
+import hypney
+from .univariate import UnivariateDistribution
 
 export, __all__ = hypney.exporter()
 
@@ -36,6 +36,13 @@ def from_histogram(histogram, bin_edges=None, *args, **kwargs):
 
 @export
 def from_samples(samples, bin_edges=None, bin_count_multiplier=1):
+    is_fin = np.isfinite(samples)
+    if not np.all(is_fin):
+        warnings.warn(
+            f"Throwing away {(~is_fin).sum()} non-finite samples out of {len(samples)}"
+        )
+        samples = samples[is_fin]
+
     if bin_edges is None:
         # Use the Freedman-Diaconis rule to guess a bin width
         iqr = stats.iqr(samples)

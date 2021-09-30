@@ -1,6 +1,8 @@
 import numpy as np
 from scipy import stats
 
+import numpy as np
+
 import hypney
 
 
@@ -12,9 +14,11 @@ def test_likelihood():
     lf = hypney.statistics.LogLikelihood(m, data=data)
     assert len(lf.data) == 5
 
-    assert lf() == -1 + 5 * stats.norm.logpdf(0)
+    np.testing.assert_almost_equal(lf(), -1 + 5 * stats.norm.logpdf(0))
 
-    assert lf(params=dict(rate=2)) == -2 + 5 * np.log(2 * stats.norm.pdf(0))
+    np.testing.assert_almost_equal(
+        lf(params=dict(rate=2)), -2 + 5 * np.log(2 * stats.norm.pdf(0))
+    )
 
 
 def test_lr():

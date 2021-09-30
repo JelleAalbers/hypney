@@ -12,7 +12,7 @@ export, __all__ = hypney.exporter()
 
 
 @export
-def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
+def to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
     if isinstance(x, type(match_type)):
         return x
     if not isinstance(match_type, ep.Tensor):
@@ -30,7 +30,7 @@ def sequence_to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
     if isinstance(match_type, ep.JAXTensor):
         return ep.jax.numpy.asarray(x, dtype=match_type.dtype)
     if isinstance(match_type, ep.PyTorchTensor):
-        return ep.torch.tensor(x, dtype=match_type.dtype)
+        return ep.torch.as_tensor(x, dtype=match_type.dtype)
     if isinstance(match_type, ep.TensorFlowTensor):
         return ep.tensorflow.convert_to_tensor(x, dtype=match_type.dtype)
     raise ValueError(f"match_type of unknown type {type(match_type)}")
@@ -73,7 +73,7 @@ def np64(x):
 def average_axis0(x, weights=None):
     x = ep.astensor(x)
     stacked = ep.stack(x, axis=0)
-    weights = sequence_to_tensor(weights, match_type=x)
+    weights = to_tensor(weights, match_type=x)
     weights = weights.reshape(tuple([len(stacked)] + [1] * (len(stacked.shape) - 1)))
     return ep.sum(stacked * weights, axis=0)
 

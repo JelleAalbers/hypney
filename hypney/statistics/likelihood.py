@@ -8,16 +8,21 @@ export, __all__ = hypney.exporter()
 @export
 class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
-        result = -self.model._rate(params) + ep.sum(
-            self.model._log_diff_rate(params=params)
+        result = (
+            -self.model._rate(params)
+            +
+            # _log_diff_rate(params=params).sum() seems less stable...
+            # Maybe this depends on whether pdf or diff_rate is fundamental for
+            # a model?
+            len(self.data) * self.model._log_rate(params)
+            + self.model._logpdf(params=params).sum()
         )
-        # old = -self.model._rate(params) + ep.sum(
-        #     ep.log(self.model._diff_rate(params=params))
-        # )
         # Somehow the scipy optimizer is fine with -inf,
-        # but not with an accurate but insanely large value??
+        # but not with accurate but insanely large values??
         # TODO: madness. Investigate.
-        return ep.where(result < -1e5, result * float("inf"), result)
+        if isinstance(self.data, ep.NumPyTensor):
+            return ep.where(result < -1e5, result * float("inf"), result)
+        return result
 
 
 @export

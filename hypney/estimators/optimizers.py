@@ -50,7 +50,7 @@ class MinimumAndValue(hypney.Estimator):
             #  fortran contiguous -- expected elsize=8 but got 4"
             fun = lambda params: [
                 ep_util.np64(x)
-                for x in _fun(ep_util.sequence_to_tensor(params, match_type=stat.data))
+                for x in _fun(ep_util.to_tensor(params, match_type=stat.data))
             ]
 
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)

@@ -310,9 +310,7 @@ class Model:
                 data = np.asarray(data)
             else:
                 # Preserve existing tensor type
-                data = hypney.utils.eagerpy.sequence_to_tensor(
-                    data, match_type=self.data
-                )
+                data = hypney.utils.eagerpy.to_tensor(data, match_type=self.data)
         if len(data.shape) == 1:
             data = data[:, None]
         data = ep.astensor(data)
@@ -339,7 +337,7 @@ class Model:
             if self.data is None:
                 quantiles = np.asarray(quantiles)
             else:
-                quantiles = hypney.utils.eagerpy.sequence_to_tensor(
+                quantiles = hypney.utils.eagerpy.to_tensor(
                     quantiles, match_type=self.data
                 )
         # Note min <= max, maybe there is only one unique quantile
@@ -519,12 +517,10 @@ class Model:
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
-    @property
-    def _tensorlib(self):
-        return hypney.utils.eagerpy.tensorlib(self.data)
-
     def _log_rate(self, params: dict):
-        return self._tensorlib.log(self.rate(params))
+        return hypney.utils.eagerpy.to_tensor(
+            self.rate(params), match_type=self.data
+        ).log()
 
     def mean(self, params: dict = None, **kwargs) -> float:
         params = self.validate_params(params, **kwargs)

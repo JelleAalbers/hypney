@@ -154,7 +154,7 @@ class Interpolation(hypney.Model):
             # No interpolator was built (e.g. diff_rate when pdf and rate known)
             return getattr(super(), "_" + itp_name)(params)
         params = self.validate_params(params)
-        anchor_tuple = hypney.utils.eagerpy.sequence_to_tensor(
+        anchor_tuple = hypney.utils.eagerpy.to_tensor(
             self._params_to_anchor_tuple(params),
             match_type=self.data if self.data is not None else np.zeros(0),
         )
