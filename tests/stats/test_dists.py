@@ -20,7 +20,7 @@ def test_dist_from_toys():
     assert (dist.mean() - 10) / 10 < 0.1
 
     dist = count.interpolate_dist_from_toys(
-        anchors=dict(rate=[1, 2, 5, 10, 20, 50, 100])
+        anchors=dict(rate=[1, 2, 5, 10, 20, 50, 100]), methods="mean"
     )
     assert 14 < dist(rate=15).mean() < 16
 

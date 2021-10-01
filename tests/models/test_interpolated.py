@@ -6,7 +6,9 @@ def test_interpolated():
     def builder(params):
         return hypney.models.uniform(**params, rate=1000)
 
-    m = hypney.models.Interpolation(builder, param_specs=dict(loc=(-0.5, 0, 0.5)))
+    m = hypney.models.Interpolation(
+        builder, param_specs=dict(loc=(-0.5, 0, 0.5)), methods=("mean", "pdf")
+    )
 
     data = m.simulate()
     assert len(data)
@@ -27,7 +29,10 @@ def test_interpolated():
 
     # Test two dimensions of anchors
     m2 = hypney.models.Interpolation(
-        builder, param_specs=dict(loc=(-0.5, 0, 0.5), scale=(0.5, 1, 1.5)), data=x
+        builder,
+        param_specs=dict(loc=(-0.5, 0, 0.5), scale=(0.5, 1, 1.5)),
+        data=x,
+        methods="pdf",
     )
 
     # TODO: same here
