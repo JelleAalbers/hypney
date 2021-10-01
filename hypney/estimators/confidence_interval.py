@@ -14,12 +14,14 @@ class UpperLimit(hypney.Estimator):
         poi=hypney.DEFAULT_RATE_PARAM.name,
         cl=0.9,
         anchors=None,
+        use_cdf=False,
         *args,
         **kwargs,
     ):
         super().__init__(stat, *args, **kwargs)
         self.poi = poi
         self.cl = cl
+        self.use_cdf = use_cdf
 
         if not stat.dist:
             raise ValueError(
@@ -56,23 +58,42 @@ class UpperLimit(hypney.Estimator):
         }
         stat_at_anchors = self.stat.compute(params=anchor_pars)
 
-        # Should it?
-        # if np.diff(stat_at_anchors).min() < 0:
-        #     raise ValueError("Statistic should be non-decreasing with POI")
+        # Find critical value (=corresponding to quantile crit_quantile) at anchors.
+        if self.use_cdf:
+            # Use CDF to transform statistic to a p-value
+            stat_at_anchors = np.array(
+                [
+                    self.stat.dist.cdf(data=stat_val, params={self.poi: x})
+                    for x, stat_val in zip(self.anchors, stat_at_anchors)
+                ]
+            )
 
-        # Find critical values at anchors.
-        # PPF is NOT vectorized, and most efficient when quantile is pre-loaded.
-        # TODO: +1 for discrete stats??
-        ppf = self.stat.dist(quantiles=crit_quantile).ppf
-        crit_at_anchors = np.array([ppf(params={self.poi: x}) for x in self.anchors])
+            def ppf(params):
+                return crit_quantile
 
-        isnan = np.isnan(crit_at_anchors)
+            cdf = self.stat.dist.cdf
+            crit_at_anchors = np.full_like(stat_at_anchors, crit_quantile)
+
+        else:
+            # Use ppf to find critical value of statistic,
+            # won't need cdf
+            def cdf(data, params):
+                return data
+
+            ppf = self.stat.dist(quantiles=crit_quantile).ppf
+            crit_at_anchors = np.array(
+                [ppf(params={self.poi: x}) for x in self.anchors]
+            )
+
+        crit_minus_stat = crit_at_anchors - stat_at_anchors
+        isnan = np.isnan(crit_minus_stat)
         if np.any(isnan):
-            raise ValueError(f"ppf returned NaN at anchors {self.anchors[isnan]}")
+            raise ValueError(
+                f"statistic or critical value NaN at {self.anchors[isnan]}"
+            )
 
         # Assume a count-like statistic; crit - stat generally grows with POI
         # => we want to find the highest value where crit <= stat
-        crit_minus_stat = crit_at_anchors - stat_at_anchors
         below = np.where(crit_minus_stat <= 0)[0]
         if not len(below):
             raise ValueError(
@@ -86,13 +107,17 @@ class UpperLimit(hypney.Estimator):
 
         # Find zero of (crit - stat) - tiny_offset
         # The offset is needed if crit = stat for an extended length
-        # (e.g. for Count)
+        # e.g. for Count or other discrete-valued statistics.
         # TODO: can we use grad? optimize.root takes a jac arg...
-        offset = 1e-3 * (crit_minus_stat[i_last + 1] - crit_minus_stat[i_last])
+        offset = 1e-9 * (crit_minus_stat[i_last + 1] - crit_minus_stat[i_last])
 
         def objective(x):
             params = {self.poi: x}
-            return ppf(params=params) - self.stat.compute(params=params) - offset
+            return (
+                ppf(params=params)
+                - cdf(data=self.stat.compute(params=params), params=params)
+                - offset
+            )
 
         return optimize.brentq(
             objective, self.anchors[i_last], self.anchors[i_last + 1]

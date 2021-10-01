@@ -19,7 +19,14 @@ def test_poisson_upper_limit():
     m = hypney.models.uniform(data=np.array([]))
     stat = hypney.statistics.Count(m)
 
-    ul = hypney.estimators.UpperLimit(stat, poi="rate", anchors=[0, 5], cl=0.9)
+    ul = hypney.estimators.UpperLimit(
+        stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False
+    )
+    np.testing.assert_allclose(ul, poisson_ul(0))
+
+    ul = hypney.estimators.UpperLimit(
+        stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=True
+    )
     np.testing.assert_allclose(ul, poisson_ul(0))
 
     # Invalid anchor
