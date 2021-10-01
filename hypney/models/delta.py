@@ -14,7 +14,8 @@ class DiracDelta(hypney.Model):
         return ep.where(self.data[:, 0] == params["loc"], float("inf"), 0)
 
     def _cdf(self, params):
-        return ep.where(self.data[:, 0] > params["loc"], 1, 0)
+        # 1 at loc and beyond, 0 before
+        return ep.where(self.data[:, 0] >= params["loc"], 1, 0)
 
     def _ppf(self, params: dict) -> np.ndarray:
         return 0 * self.quantiles + params["loc"]
