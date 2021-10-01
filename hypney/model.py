@@ -256,8 +256,7 @@ class Model:
 
     def _fix(self, fix):
         fix = self.validate_params(fix, set_defaults=False)
-        return hypney.models.Reparametrized(
-            orig_model=self,
+        return self.reparametrize(
             param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
             transform_params=functools.partial(_merge_dicts, fix),
         )
@@ -624,12 +623,6 @@ class WrappedModel(Model):
         kwargs.setdefault("observables", self._orig_model.observables)
         kwargs.setdefault("param_specs", self._orig_model.param_specs)
         super().__init__(*args, **kwargs)
-
-    def _init_data(self):
-        self._orig_model = self._orig_model(data=self.data)
-
-    def _init_quantiles(self):
-        self._orig_model = self._orig_model(quantiles=self.quantiles)
 
 
 def _merge_dicts(x, y):

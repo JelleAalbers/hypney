@@ -63,7 +63,7 @@ class UpperLimit(hypney.Estimator):
         # Find critical values at anchors.
         # PPF is NOT vectorized, and most efficient when quantile is pre-loaded.
         # TODO: +1 for discrete stats??
-        ppf = self.stat.dist(quantiles=crit_quantile).ppf_
+        ppf = self.stat.dist(quantiles=crit_quantile).ppf
         crit_at_anchors = np.array([ppf(params={self.poi: x}) for x in self.anchors])
 
         isnan = np.isnan(crit_at_anchors)

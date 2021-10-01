@@ -67,8 +67,8 @@ class Statistic:
                         new_spec = p._replace(anchors=dist_spec.anchors)
                 param_specs.append(new_spec)
 
-            self.dist = hypney.models.Reparametrized(
-                dist, transform_params=transform_params, param_specs=param_specs,
+            self.dist = dist.reparametrize(
+                transform_params=transform_params, param_specs=param_specs,
             )
 
         # if dist is None and we can't build_dist, leave dist None;

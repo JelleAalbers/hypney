@@ -47,6 +47,8 @@ class CutModel(hypney.WrappedModel):
         super().__init__(orig_model=orig_model, *args, **kwargs)
 
     def _init_data(self):
+        self._orig_model = self._orig_model(data=self.data)
+
         # Compute which events pass cut
         passed = 1 + 0 * self.data[:, 0]
         if self.cut == NoCut:
@@ -55,7 +57,11 @@ class CutModel(hypney.WrappedModel):
             passed *= (l <= self.data[:, dim_i]) * (self.data[:, dim_i] < r)
         self._passes_cut = passed
 
-        return super()._init_data()
+    def _init_quantiles(self):
+        # quantiles for the original model depend on parameters;
+        # can't compute them until params known
+        # (I suppose we could compute them for the defaults, but why bother)
+        pass
 
     # New methods specific to CutModel
 
@@ -178,8 +184,6 @@ class CutModel(hypney.WrappedModel):
         return ((self._orig_model._cdf(params) - c_low) / (c_high - c_low)).clip(0, 1)
 
     def _ppf(self, params: dict):
-        if self.n_dim > 1:
-            raise NotImplementedError("PPF not well-defined in > 1 dimension")
         c_low, c_high = self._corners_cdf(params)
 
         # self.quantiles == (orig_quantiles - c_low).clip(0, None) / (c_high - c_low)
