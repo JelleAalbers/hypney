@@ -91,11 +91,11 @@ As with a cut model, the new model takes the same parameters, which are simply p
     :include-source: True
     :context: close-figs
 
-    m_orig(loc=2).plot_pdf()
-    m_scaled(loc=2).plot_pdf()
+    m_orig(loc=3).plot_pdf()
+    m_scaled(loc=3).plot_pdf()
 
 
-Setting ``m_scaled``'s loc to 2 caused the model's mean to shift to 4, not 2. Our `m_scaled` models data generated from a normal with some mean and loc, then multiplied by 2. The `loc=2` sets the mean of the underlying normal to 2, meaning ``m_scaled`` has a mean of 4.
+Setting ``m_scaled``'s loc to 3 caused the model's mean to shift to 6, not 3; as promised, ``loc`` controls the mean of the model before the factor 2 scaling.
 
 (You can use ``Model.shift_and_scale`` for data that was first shifted, then scaled. This is very slightly more efficient than calling ``Model.shift(...).scale(...)``.)
 

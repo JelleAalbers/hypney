@@ -132,7 +132,7 @@ Hypney includes a small plotting helper to quickly inspect one-dimensional model
     m.plot_cdf()
     plt.show()
 
-By default, hypney will guess some sensible bounds of the observable. You can specify your own set of datapoints to plot over as the first argument. Other arguments are passed to ``plt.plot`` (or ``plt.hist`` for discrete observables). Passing ``auto_labels=False`` suppresses the default axis labels.
+By default, hypney will guess upper and lower bounds to plot between. You can specify datapoints to plot over as the first argument. Other arguments are passed to ``plt.plot`` (or ``plt.hist`` for discrete observables). Passing ``auto_labels=False`` suppresses the default axis labels.
 
 .. plot::
     :include-source: True
