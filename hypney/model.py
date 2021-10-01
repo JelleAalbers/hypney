@@ -622,6 +622,11 @@ class WrappedModel(Model):
             self._orig_model = orig_model
         kwargs.setdefault("observables", self._orig_model.observables)
         kwargs.setdefault("param_specs", self._orig_model.param_specs)
+        # TODO: this causes _orig_model._init_data to often be run twice...
+        # But without it self.data could be None while self._orig_model.data
+        # would be set
+        kwargs.setdefault("data", self._orig_model.data)
+        kwargs.setdefault("quantiles", self._orig_model.quantiles)
         super().__init__(*args, **kwargs)
 
 
