@@ -13,7 +13,17 @@ def poisson_ul(n, mu_bg=0, cl=0.9):
     NB: can be negative if mu_bg large enough.
     It's your responsibility to clip to 0...
     """
+    # Adapted from https://stackoverflow.com/a/14832525
     return stats.chi2.ppf(cl, 2 * n + 2) / 2 - mu_bg
+
+
+def poisson_ll(n, cl=0.9):
+    # Adapted from https://stackoverflow.com/a/14832525
+    # Checked through
+    #     n = np.arange(0, 100)
+    #     stats.poisson(poisson_ul(n)).cdf(n)
+    # (and similarly for upper limit)
+    return stats.chi2.ppf(1 - cl, 2 * n + 2) / 2
 
 
 def test_poisson_upper_limit():
@@ -65,6 +75,6 @@ def test_poisson_upper_limit():
 
     # Now data is not empty, UL finite (and negative)
     ul = hypney.estimators.UpperLimit(
-        stat3(data=np.ones(50)), poi="neg_rate", anchors=[-100, -20], cl=0.9, sign=-1
+        stat3(data=np.ones(50)), poi="neg_rate", anchors=[-50, -20], cl=0.9, sign=-1
     )
-    np.testing.assert_allclose(ul, -poisson_ul(50))
+    np.testing.assert_allclose(ul, -poisson_ll(50))
