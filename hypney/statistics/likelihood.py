@@ -37,7 +37,7 @@ class LikelihoodRatio(hypney.Statistic):
     def _init_data(self):
         super()._init_data()
         self.ll = LogLikelihood(self.model)
-        self.bestfit, self.ll_bestfit = self.max_est(self.ll)()
+        self.bestfit, self.ll_bestfit = self.max_est(self.ll)
 
     def _compute(self, params):
         return -2 * (self.ll._compute(params=params) - self.ll_bestfit)
@@ -63,7 +63,7 @@ class PLR(LikelihoodRatio):
     def _compute(self, params):
         self.conditional_fit, self.ll_conditional_fit = self.max_est(
             self.ll, fix=self._filter_poi(params)
-        )()
+        )
         # Probably slower alternative:
         # conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
         return self.ll_conditional_fit - self.ll_bestfit
@@ -88,8 +88,7 @@ class PLROrZero(PLR):
 
     def _build_dist(self):
         return (
-            hypney.models.DiracDelta(rate=0.5)
-            + hypney.models.chi2(df=1, rate=0.5)
+            hypney.models.DiracDelta(rate=0.5) + hypney.models.chi2(df=1, rate=0.5)
         ).freeze()
 
 

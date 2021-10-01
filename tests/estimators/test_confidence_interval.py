@@ -19,19 +19,17 @@ def test_poisson_upper_limit():
     m = hypney.models.uniform(data=np.array([]))
     stat = hypney.statistics.Count(m)
 
-    ul = hypney.estimators.UpperLimit(stat, anchors=[0, 5], cl=0.9)()
+    ul = hypney.estimators.UpperLimit(stat, anchors=[0, 5], cl=0.9)
     np.testing.assert_allclose(ul, poisson_ul(0))
 
     # Invalid anchor
     with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(stat, anchors=[-5, 5], cl=0.9)()
+        hypney.estimators.UpperLimit(stat, anchors=[-5, 5], cl=0.9)
 
     # Limit is above last anchor
     with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(stat, anchors=[0, 2], cl=0.9)()
+        hypney.estimators.UpperLimit(stat, anchors=[0, 2], cl=0.9)
 
     # Limit is below first anchor
     with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(
-            stat.set(data=np.ones(10)), anchors=[0, 2], cl=0.9
-        )()
+        hypney.estimators.UpperLimit(stat.set(data=np.ones(10)), anchors=[0, 2], cl=0.9)

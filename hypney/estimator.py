@@ -4,25 +4,33 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class Estimator:
+class FunctionLike(type):
+    """An function-like type implemented as a class
+
+    FunctionLike's return the result of some computation when called,
+    just like a function, but are implemented as a class, and can thus use
+    attributes, methods, inheritance, etc.
+
+    Roughly, a call to a FunctionLike results in:
+      * Making a new instance (`self`) as usual,
+        including a call to `self.__init__(*args, **kwargs)`
+      * `return self()`, rather than `return self`
+    """
+
+    def __call__(cls, *args, **kwargs):
+        return super().__call__(*args, **kwargs).__call__()
+
+
+@export
+class Estimator(metaclass=FunctionLike):
     stat: hypney.Statistic
 
-    # TODO: fix_except option
-    def __init__(self, stat: hypney.Statistic, fix: dict = None):
+    def __init__(self, stat: hypney.Statistic, fix: dict = None, **kwargs):
         self.stat = stat
         self.fix = self.stat.model.validate_params(fix, set_defaults=False)
 
-    def __call__(self, data=hypney.NotChanged):
-        if data is not hypney.NotChanged:
-            stat = self.stat.set(data=data)
-        else:
-            if self.stat.data is None:
-                raise ValueError("Provide data")
-            stat = self.stat
-        return self._compute(stat)
-
-    def _compute(self, stat):
-        raise NotImplementedError
+    def __call__(self):
+        return self._compute()
 
     # Generic routines, may be useful
 

@@ -13,7 +13,8 @@ def exporter(*, also_export=tuple(), export_self=False):
     return decorator, all_
 
 
-from .utils import *
+from . import utils
+
 from .basics import *
 
 from .model import *

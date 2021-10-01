@@ -12,15 +12,15 @@ export, __all__ = hypney.exporter()
 class MinimumAndValue(hypney.Estimator):
     sign = 1
 
-    def _compute(self, stat: hypney.Statistic):
+    def _compute(self):
         guess = np.array([p.default for p in self._free_params()])
         bounds = [(p.min, p.max) for p in self._free_params()]
 
-        if isinstance(stat.data, ep.NumPyTensor):
+        if isinstance(self.stat.data, ep.NumPyTensor):
             jac = None
 
             def fun(params):
-                result = self.sign * stat._compute(
+                result = self.sign * self.stat._compute(
                     params=self._param_sequence_to_dict(params)
                 )
                 return ep_util.np64(result)
@@ -31,12 +31,14 @@ class MinimumAndValue(hypney.Estimator):
             def _fun(params):
                 result, grad = ep.value_and_grad(
                     lambda param_tensor: self.sign
-                    * stat._compute(params=self._param_sequence_to_dict(param_tensor)),
+                    * self.stat._compute(
+                        params=self._param_sequence_to_dict(param_tensor)
+                    ),
                     params,
                 )
                 return result, grad
 
-            if isinstance(ep.astensor(stat.data), ep.JAXTensor):
+            if isinstance(ep.astensor(self.stat.data), ep.JAXTensor):
                 # Can't just ep.jax.jit, it tries to wrap the output
                 # (i.e. the compiled function) as an eagerpy tensor...
                 import jax
@@ -50,7 +52,7 @@ class MinimumAndValue(hypney.Estimator):
             #  fortran contiguous -- expected elsize=8 but got 4"
             fun = lambda params: [
                 ep_util.np64(x)
-                for x in _fun(ep_util.to_tensor(params, match_type=stat.data))
+                for x in _fun(ep_util.to_tensor(params, match_type=self.stat.data))
             ]
 
         result = optimize.minimize(fun=fun, jac=jac, x0=guess, bounds=bounds)
@@ -62,8 +64,8 @@ class MinimumAndValue(hypney.Estimator):
 
 @export
 class Minimum(MinimumAndValue):
-    def _compute(self, stat):
-        return super()._compute(stat)[0]
+    def _compute(self):
+        return super()._compute()[0]
 
 
 @export

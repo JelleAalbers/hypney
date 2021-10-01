@@ -17,6 +17,7 @@ class UpperLimit(hypney.Estimator):
         *args,
         **kwargs,
     ):
+        super().__init__(stat, *args, **kwargs)
         self.poi = poi
         self.cl = cl
         if not anchors:
@@ -30,9 +31,8 @@ class UpperLimit(hypney.Estimator):
         if not anchors:
             raise ValueError("Provide anchors to initially evaluate poi on")
         self.anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
-        super().__init__(stat, *args, **kwargs)
 
-    def _compute(self, stat: hypney.Statistic):
+    def _compute(self):
         # Note: upper limit boundaries are *low* percentiles
         # of the distribution! See Neyman belt construction diagram.
         crit_quantile = 1 - self.cl
@@ -40,9 +40,11 @@ class UpperLimit(hypney.Estimator):
         # Evaluate statistic at anchors
         # (statistic is vectorized over params)
         anchor_pars = {
-            self.poi: hypney.utils.eagerpy.to_tensor(self.anchors, match_type=stat.data)
+            self.poi: hypney.utils.eagerpy.to_tensor(
+                self.anchors, match_type=self.stat.data
+            )
         }
-        stat_at_anchors = stat.compute(params=anchor_pars)
+        stat_at_anchors = self.stat.compute(params=anchor_pars)
 
         # Should it?
         # if np.diff(stat_at_anchors).min() < 0:
@@ -51,7 +53,7 @@ class UpperLimit(hypney.Estimator):
         # Find critical values at anchors.
         # PPF is NOT vectorized, and most efficient when quantile is pre-loaded.
         # TODO: +1 for discrete stats??
-        ppf = stat.dist(quantiles=crit_quantile).ppf_
+        ppf = self.stat.dist(quantiles=crit_quantile).ppf_
         crit_at_anchors = np.array([ppf(params={self.poi: x}) for x in self.anchors])
 
         isnan = np.isnan(crit_at_anchors)
