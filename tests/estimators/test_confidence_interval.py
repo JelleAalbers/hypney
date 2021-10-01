@@ -3,6 +3,7 @@ import pytest
 from scipy import stats
 
 import hypney
+from hypney.basics import ParameterSpec
 
 
 def poisson_ul(n, mu_bg=0, cl=0.9):
@@ -47,3 +48,23 @@ def test_poisson_upper_limit():
     stat2 = stat.set(dist=stat.interpolate_dist_from_toys(anchors=dict(rate=(0, 5))))
     ul = hypney.estimators.UpperLimit(stat2, poi="rate", cl=0.9)
     assert 0 < ul < 5
+
+    # Test case where statistic decreases as parameter increases
+    # Data is still empty, so UL should be all the way at 0
+    mneg = m.reparametrize(
+        lambda params: dict(rate=-params["neg_rate"]),
+        param_specs=(
+            ParameterSpec(name="neg_rate", default=0, min=-float("inf"), max=0),
+        ),
+    )
+    stat3 = hypney.statistics.Count(mneg)
+    ul = hypney.estimators.UpperLimit(
+        stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1
+    )
+    assert ul == 0.0
+
+    # Now data is not empty, UL finite (and negative)
+    ul = hypney.estimators.UpperLimit(
+        stat3(data=np.ones(50)), poi="neg_rate", anchors=[-100, -20], cl=0.9, sign=-1
+    )
+    np.testing.assert_allclose(ul, -poisson_ul(50))

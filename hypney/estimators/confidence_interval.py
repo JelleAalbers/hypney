@@ -13,6 +13,7 @@ class UpperLimit(hypney.Estimator):
         stat,
         poi=hypney.DEFAULT_RATE_PARAM.name,
         cl=0.9,
+        sign=1,
         anchors=None,
         use_cdf=False,
         *args,
@@ -21,7 +22,9 @@ class UpperLimit(hypney.Estimator):
         super().__init__(stat, *args, **kwargs)
         self.poi = poi
         self.cl = cl
+        self.sign = sign
         self.use_cdf = use_cdf
+        self.poi_spec = stat.model.param_spec_for(poi)
 
         if not stat.dist:
             raise ValueError(
@@ -29,25 +32,34 @@ class UpperLimit(hypney.Estimator):
             )
 
         # Collect anchors
+        user_gave_anchors = bool(anchors)
         if not anchors:
             # Get anchors from the distribution
             # (these will e.g. be present if the dist was generated from toys)
             anchors = stat.dist.param_spec_for(poi).anchors
         if not anchors:
             # No anchors in dist; try the model instead.
-            anchors = stat.model.param_spec_for(poi).anchors
+            anchors = self.poi_spec.anchors
+        if not anchors:
+            # If bounds on param are finite, use them as anchors
+            bounds = np.array([self.poi_spec.min, self.poi_spec.max])
+            if np.all(np.isfinite(bounds)):
+                anchors = bounds
         if not anchors:
             raise ValueError("Provide anchors to initially evaluate poi on")
         anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
-        if hasattr(stat, "bestfit"):
+        if not user_gave_anchors and hasattr(stat, "bestfit"):
             # Add bestfit of POI as an anchor
             anchors = np.concatenate(anchors, stat.bestfit[poi])
         self.anchors = np.sort(anchors)
 
     def _compute(self):
-        # Note: upper limit boundaries are *low* percentiles
-        # of the distribution! See Neyman belt construction diagram.
-        crit_quantile = 1 - self.cl
+        if self.sign:
+            # Upper limit boundaries are *low* percentiles
+            # of the distribution! See Neyman belt construction diagram.
+            crit_quantile = 1 - self.cl
+        else:
+            crit_quantile = self.cl
 
         # Evaluate statistic at anchors
         # (statistic is vectorized over params)
@@ -92,15 +104,22 @@ class UpperLimit(hypney.Estimator):
                 f"statistic or critical value NaN at {self.anchors[isnan]}"
             )
 
-        # Assume a count-like statistic; crit - stat generally grows with POI
-        # => we want to find the highest value where crit <= stat
-        below = np.where(crit_minus_stat <= 0)[0]
-        if not len(below):
+        # Sign of +1 assumes a count-like statistic; crit - stat grows with POI
+        # => upper limit is above the highest anchor for which
+        # crit - stat <= 0 (i.e. crit too low, so still in interval)
+        still_in = np.where(self.sign * crit_minus_stat <= 0)[0]
+        if not len(still_in):
+            if self.anchors[0] == self.poi_spec.min:
+                # Lowest possible value is still in interval.
+                return self.anchors[0]
             raise ValueError(
                 f"Upper limit is below the lowest anchor {self.anchors[0]}"
             )
-        i_last = below[-1]
+        i_last = still_in[-1]
         if i_last == len(self.anchors) - 1:
+            if self.anchors[-1] == self.poi_spec.max:
+                # Highest possible value is still in interval.
+                return self.anchors[-1]
             raise ValueError(
                 f"Upper limit exceeds the highest anchor {self.anchors[-1]}"
             )
@@ -109,7 +128,9 @@ class UpperLimit(hypney.Estimator):
         # The offset is needed if crit = stat for an extended length
         # e.g. for Count or other discrete-valued statistics.
         # TODO: can we use grad? optimize.root takes a jac arg...
-        offset = 1e-9 * (crit_minus_stat[i_last + 1] - crit_minus_stat[i_last])
+        offset = (
+            self.sign * 1e-9 * (crit_minus_stat[i_last + 1] - crit_minus_stat[i_last])
+        )
 
         def objective(x):
             params = {self.poi: x}
