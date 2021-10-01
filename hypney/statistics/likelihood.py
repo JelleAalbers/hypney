@@ -69,7 +69,7 @@ class PLR(LikelihoodRatio):
         return self.ll_conditional_fit - self.ll_bestfit
 
     def _build_dist(self):
-        return hypney.models.chi2(df=len(self.poi))
+        return hypney.models.chi2(df=len(self.poi)).freeze()
 
 
 class PLROrZero(PLR):
@@ -87,7 +87,10 @@ class PLROrZero(PLR):
         return result
 
     def _build_dist(self):
-        return hypney.models.DiracDelta(rate=0.5) + hypney.models.chi2(df=1, rate=0.5)
+        return (
+            hypney.models.DiracDelta(rate=0.5)
+            + hypney.models.chi2(df=1, rate=0.5)
+        ).freeze()
 
 
 @export
@@ -105,10 +108,7 @@ class SignedPLR(PLR):
             # Low / Deficit hypothesis (if poi ~ rate)
             return -result
 
-    def _dist_params(self, params):
-        return dict()
-
     def _build_dist(self):
-        return hypney.models.chi2(df=1, rate=0.5).shift_and_scale(
-            scale=-1
-        ) + hypney.models.chi2(df=1, rate=0.5)
+        half_chi2 = hypney.models.chi2(df=1, rate=0.5)
+        dist = half_chi2 + half_chi2.scale(-1)
+        return dist.freeze()

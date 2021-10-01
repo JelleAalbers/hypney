@@ -12,11 +12,11 @@ def test_count():
     stat = hypney.statistics.Count(m, data=data)
     assert len(stat.data) == 5
 
-    np.testing.assert_equal(stat(), 5)
-    np.testing.assert_equal(stat(rate=42), 5)
+    np.testing.assert_equal(stat.compute(), 5)
+    np.testing.assert_equal(stat.compute(rate=42), 5)
 
     # Test vectorization
-    vec_result = stat(rate=np.array([-42, 0]))
+    vec_result = stat.compute(rate=np.array([-42, 0]))
     assert len(vec_result) == 2
     np.testing.assert_equal(vec_result, np.array([5, 5]))
 

@@ -14,15 +14,17 @@ def test_likelihood():
     lf = hypney.statistics.LogLikelihood(m, data=data)
     assert len(lf.data) == 5
 
-    np.testing.assert_almost_equal(lf(), -1 + 5 * stats.norm.logpdf(0))
+    np.testing.assert_almost_equal(lf.compute(), -1 + 5 * stats.norm.logpdf(0))
 
     np.testing.assert_almost_equal(
-        lf(params=dict(rate=2)), -2 + 5 * np.log(2 * stats.norm.pdf(0))
+        lf.compute(params=dict(rate=2)), -2 + 5 * np.log(2 * stats.norm.pdf(0))
     )
 
     # Test vectorization
     rates = np.linspace(0.1, 10, 10)
-    np.testing.assert_equal(lf(rate=rates), np.array([lf(rate=x) for x in rates]))
+    np.testing.assert_equal(
+        lf.compute(rate=rates), np.array([lf.compute(rate=x) for x in rates])
+    )
 
 
 def test_lr():
@@ -39,7 +41,7 @@ def test_lr():
     assert np.isclose(lr.bestfit["scale"], min_scale)
     assert np.isclose(lr.bestfit["loc"], 0)
 
-    double_rate = lr(params={**lr.bestfit, **dict(rate=2)})
+    double_rate = lr.compute(params={**lr.bestfit, **dict(rate=2)})
     assert np.isclose(
         double_rate,
         -2

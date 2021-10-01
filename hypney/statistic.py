@@ -99,8 +99,8 @@ class Statistic:
     # Computation
     ##
 
-    def __call__(self, data=NotChanged, params: dict = None, **kwargs):
-        return self.compute(data=data, params=params, **kwargs)
+    def __call__(self, data=NotChanged, dist=NotChanged, params=NotChanged, **kwargs):
+        return self.set(data=data, params=params, **kwargs)
 
     def compute(self, data=NotChanged, params: dict = None, **kwargs):
         return hypney.utils.eagerpy.ensure_raw(
