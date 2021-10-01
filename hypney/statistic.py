@@ -40,25 +40,39 @@ class Statistic:
     def _set_dist(self, dist: hypney.Model):
         if dist is NotChanged:
             return
+
         if dist is None:
             if hasattr(self, "_build_dist"):
                 # Build a distribution automatically
-                self.dist = hypney.models.Reparametrized(
-                    self._build_dist(),
-                    transform_params=self._dist_params,
-                    param_specs=self.model.param_specs,
-                )
+                dist = self._build_dist()
+                transform_params = self._dist_params
         else:
-            # Use the distribution passed by the user.
-            # Make it take the model params, then ignore ones it does not depend on.
-            filter_params = functools.partial(
+            # Use the user's distribution, but make it take all the model's params,
+            # ignoring params the dist does not depend on.
+            transform_params = functools.partial(
                 _filter_params, allowed_names=dist.param_names
             )
+
+        if dist is not None:
+            # Make the dist take the same parameters as the model,
+            # even if it depends on fewer / different parameters.
+            param_specs = []
+            for p in self.model.param_specs:
+                # Set anchors from dist if available, copy the rest of the param
+                # spec -- especially defaults! -- from model
+                new_spec = p
+                if p.name in dist.param_names:
+                    dist_spec = dist.param_spec_for(p.name)
+                    if dist_spec.anchors and not p.anchors:
+                        new_spec = p._replace(anchors=dist_spec.anchors)
+                param_specs.append(new_spec)
+
             self.dist = hypney.models.Reparametrized(
-                dist,
-                transform_params=filter_params,
-                param_specs=self.model.param_specs,
+                dist, transform_params=transform_params, param_specs=param_specs,
             )
+
+        # if dist is None and we can't build_dist, leave dist None;
+        # some estimators will complain.
 
     def _set_data(self, data):
         if data is NotChanged:

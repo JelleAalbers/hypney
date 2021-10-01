@@ -20,17 +20,27 @@ class UpperLimit(hypney.Estimator):
         super().__init__(stat, *args, **kwargs)
         self.poi = poi
         self.cl = cl
+
+        if not stat.dist:
+            raise ValueError(
+                "Statistic has no distribution, cannot set confidence intervals"
+            )
+
+        # Collect anchors
         if not anchors:
             # Get anchors from the distribution
-            # (e.g. will be present if generated from toys)
-            if stat.dist and poi in stat.dist.param_names:
-                anchors = stat.dist.param_spec_for(poi).anchors
+            # (these will e.g. be present if the dist was generated from toys)
+            anchors = stat.dist.param_spec_for(poi).anchors
         if not anchors:
-            # Get anchors from the model
+            # No anchors in dist; try the model instead.
             anchors = stat.model.param_spec_for(poi).anchors
         if not anchors:
             raise ValueError("Provide anchors to initially evaluate poi on")
-        self.anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
+        anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
+        if hasattr(stat, "bestfit"):
+            # Add bestfit of POI as an anchor
+            anchors = np.concatenate(anchors, stat.bestfit[poi])
+        self.anchors = np.sort(anchors)
 
     def _compute(self):
         # Note: upper limit boundaries are *low* percentiles
