@@ -36,6 +36,7 @@ def from_histogram(histogram, bin_edges=None, *args, **kwargs):
 
 @export
 def from_samples(samples, bin_edges=None, bin_count_multiplier=1):
+    assert len(samples)
     is_fin = np.isfinite(samples)
     if not np.all(is_fin):
         warnings.warn(
@@ -51,8 +52,9 @@ def from_samples(samples, bin_edges=None, bin_count_multiplier=1):
             # Can happen for discrete statistics, e.g. count with mean 0.01
             iqr = 1.34 * samples.std()
         if iqr == 0:
-            # All values are the same; choose a tiny bin width
-            iqr = max_offset = 1e-9
+            # All values are the same; return a delta function
+            # rather than a histogram
+            return hypney.models.DiracDelta(loc=samples[0])
         width_fd = 2 * iqr / len(samples) ** (1 / 3)
 
         # The final bin's right edge is inclusive (see np.histogram)
