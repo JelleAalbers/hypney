@@ -7,7 +7,7 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class UpperLimit(hypney.Estimator):
+class ConfidenceInterval(hypney.Estimator):
     def __init__(
         self,
         stat,
@@ -62,9 +62,6 @@ class UpperLimit(hypney.Estimator):
         }
         self.stat_at_anchors = self.stat.compute(params=anchor_pars)
 
-    def _compute(self):
-        return self._compute_side()
-
     def _compute_side(self, side=+1):
         # +1 for upper limit on statistic that (on large scales)
         # takes higher-percentile values as the POI grows (like count)
@@ -111,37 +108,72 @@ class UpperLimit(hypney.Estimator):
                 f"statistic or critical value NaN at {self.anchors[isnan]}"
             )
 
-        # => upper limit is above the highest anchor for which
+        # sign+1 => upper limit is above the highest anchor for which
         # crit - stat <= 0 (i.e. crit too low, so still in interval)
         still_in = np.where(sign * crit_minus_stat <= 0)[0]
         if not len(still_in):
-            if self.anchors[0] == self.poi_spec.min:
-                # Lowest possible value is still in interval.
-                return self.anchors[0]
-            raise ValueError(f"Lowest anchor {self.anchors[0]} is still in interval")
-        i_last = still_in[-1]
-        if i_last == len(self.anchors) - 1:
-            if self.anchors[-1] == self.poi_spec.max:
+            raise ValueError(
+                f"None of the anchors {self.anchors} are inside the confidence interval"
+            )
+
+        if side > 0:
+            ileft = still_in[-1]
+            if ileft == len(self.anchors) - 1:
                 # Highest possible value is still in interval.
-                return self.anchors[-1]
-            raise ValueError(f"Highest anchor {self.anchors[-1]} is still in interval")
+                if self.anchors[-1] == self.poi_spec.max:
+                    # Fine, since it's the maximum possible value
+                    return self.anchors[-1]
+                else:
+                    raise ValueError(
+                        f"Can't compute upper limit, highest anchor {self.anchors[-1]} still in interval"
+                    )
+            iright = ileft + 1
+
+        else:
+            iright = still_in[0]
+            if iright == 0:
+                # Lowest possible value is still in interval.
+                if self.anchors[0] == self.poi_spec.min:
+                    # Fine, since it's the minimum possible value
+                    return self.anchors[0]
+                else:
+                    raise ValueError(
+                        f"Can't compute lower limit, lowest anchor {self.anchors[0]} still in interval"
+                    )
+            ileft = iright - 1
 
         # Find zero of (crit - stat) - tiny_offset
         # The offset is needed if crit = stat for an extended length
         # e.g. for Count or other discrete-valued statistics.
         # TODO: can we use grad? optimize.root takes a jac arg...
-        offset = sign * 1e-9 * (crit_minus_stat[i_last + 1] - crit_minus_stat[i_last])
+        # Don't ask about the sign. All four side/sign combinations are tested...
+        offset = self.sign * 1e-9 * (crit_minus_stat[ileft] - crit_minus_stat[iright])
 
         def objective(x):
             params = {self.poi: x}
             return (
                 ppf(params=params)
                 - cdf(data=self.stat.compute(params=params), params=params)
-                - offset
+                + offset
             )
 
-        if side > 0:
-            ileft, iright = i_last, i_last + 1
-        else:
-            ileft, iright = i_last - 1, i_last
         return optimize.brentq(objective, self.anchors[ileft], self.anchors[iright])
+
+
+@export
+class UpperLimit(ConfidenceInterval):
+    def _compute(self):
+        return self._compute_side(+1)
+
+
+@export
+class LowerLimit(ConfidenceInterval):
+    def _compute(self):
+        return self._compute_side(-1)
+
+
+@export
+class CentralInterval(ConfidenceInterval):
+    def _compute(self):
+        self.cl = 1 - (1 - self.cl) / 2
+        return self._compute_side(-1), self._compute_side(+1)

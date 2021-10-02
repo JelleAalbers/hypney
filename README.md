@@ -9,10 +9,10 @@ Synopsis
 ```python
 import hypney.all as hp
 
-model = hp.Norm() + hp.Norm(loc=5).fix(rate=7)
+model = hp.norm() + hp.norm(loc=5).fix(rate=7)
 data = model.simulate()
 statistic = hp.LogLikelihood(model, data)
-bestfit = hp.Maximum(statistic)()
+bestfit = hp.Maximum(statistic)
 ```
 
 This defines a model made from two Gaussians (the second with a fixed event rate / known amplitude), simulates a dataset, then computes a maximum likelihood fit.
@@ -23,11 +23,11 @@ Features
   * Build models in multiple dimensions, with shared or independent parameters, using analytic distributions or histograms as building blocks.
   * Support for [numpy](https://numpy.org/), [pytorch](https://pytorch.org/), [tensorflow](https://www.tensorflow.org/), and [JAX](https://github.com/google/jax). Just provide your data as a tensor or array, and hypney will use the corresponding library under the hood, including autodifferentiation to speed up optimizations. (Thanks to [eagerpy](https://github.com/jonasrauber/eagerpy)!)
   * Depends only on numpy, scipy, and pure-python packages.
-  * You can share hypney's built-in elements in threads, or copy them out to forked processes. They are serializable through pickle, and stateless / immutable after they are built.
+  * Models/statistics are immutable and pickle-able, enabling serialization, multithreading and multiprocessing.
+  * Exact / non-asymptotic frequentist inference, such as confidence intervals from [Neyman constructions](https://en.wikipedia.org/wiki/Neyman_construction).
 
 Features on the way
 -------------------
- * Convenient support for exact / non-asymptotic frequentist inference, such as confidence intervals from [Neyman constructions](https://en.wikipedia.org/wiki/Neyman_construction).
 
  * Robust limit-setting statistics, such as [optimum interval](https://arxiv.org/abs/physics/0203002).
 
