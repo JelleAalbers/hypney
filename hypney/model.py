@@ -48,7 +48,7 @@ class Model:
     def __init__(
         self,
         *,
-        name="",
+        name=NotChanged,
         data=None,
         params=NotChanged,  # Really defaults...
         param_specs=NotChanged,
@@ -56,7 +56,8 @@ class Model:
         quantiles=None,
         **kwargs,
     ):
-        self.name = name
+        if name is not NotChanged:
+            self.name = name
 
         # These have default class attributes
         if param_specs is not NotChanged:
@@ -128,6 +129,31 @@ class Model:
     def __call__(self, **kwargs):
         return self.set(**kwargs)
 
+    def set(
+        self,
+        *,
+        name=NotChanged,
+        data=NotChanged,
+        quantiles=NotChanged,
+        params=NotChanged,
+        **kwargs,
+    ):
+        """Return a model with possibly changed name, defaults, data, or parameters"""
+        if (
+            name is NotChanged
+            and data is NotChanged
+            and quantiles is NotChanged
+            and not params
+            and not kwargs
+        ):
+            return self
+
+        new_self = copy(self)
+        Model.__init__(
+            new_self, name=name, data=data, quantiles=quantiles, params=params, **kwargs
+        )
+        return new_self
+
     def mix_with(self, *others):
         return hypney.models.mixture(*((self,) + others))
 
@@ -144,42 +170,6 @@ class Model:
         return hypney.models.Reparametrized(
             self, transform_params=transform_params, *args, **kwargs
         )
-
-    def set(
-        self,
-        *,
-        name=NotChanged,
-        data=NotChanged,
-        params=NotChanged,
-        quantiles=NotChanged,
-        fix=None,
-        fix_except=None,
-        **kwargs,
-    ):
-        """Return a model with possibly changed name, defaults, data, or parameters"""
-        if (
-            name is NotChanged
-            and data is NotChanged
-            and quantiles is NotChanged
-            and not params
-            and not kwargs
-            and fix is None
-            and fix_except is None
-        ):
-            return self
-        new_self = copy(self)
-        if name is not NotChanged:
-            new_self.name = name
-        new_self._validate_and_set_defaults(params, **kwargs)
-        new_self._set_data(data)
-        new_self._set_quantiles(quantiles)
-        if fix is not None:
-            new_self = new_self.fix(fix)
-            if fix_except is not None:
-                raise ValueError("Provide either fix or fix_except, not both")
-        if fix_except is not None:
-            new_self = new_self.fix_except(fix)
-        return new_self
 
     def cut(self, *args, **kwargs):
         """Return new model with observables cut to a rectangular region
@@ -221,7 +211,7 @@ class Model:
         return self.shift_and_scale(shift=-self.mean(), scale=1 / self.std())
 
     def fix(self, params=None, **kwargs):
-        """Return new model with parameters in fix fixed
+        """Return model with parameters in fix fixed
 
         Args:
          - params: sequence of parameter names to fix, or dict of parameters
@@ -229,13 +219,19 @@ class Model:
 
         Other keyword arguments will be added to params.
         """
+        if not params and not kwargs:
+            return self
         if params is None:
             params = dict()
         if isinstance(params, str):
             params = (params,)
         if isinstance(params, (list, tuple)):
             params = {pname: self.defaults[pname] for pname in params}
-        return self._fix(_merge_dicts(params, kwargs))
+        params = self.validate_params(params, **kwargs, set_defaults=False)
+        return self.reparametrize(
+            param_specs=tuple([p for p in self.param_specs if p.name not in params]),
+            transform_params=functools.partial(_merge_dicts, params),
+        )
 
     def fix_except(self, keep=tuple()):
         """Return new model with only parameters named in keep;
@@ -253,13 +249,6 @@ class Model:
         All parameters are fixed to their defaults
         """
         return self.fix_except()
-
-    def _fix(self, fix):
-        fix = self.validate_params(fix, set_defaults=False)
-        return self.reparametrize(
-            param_specs=tuple([p for p in self.param_specs if p.name not in fix]),
-            transform_params=functools.partial(_merge_dicts, fix),
-        )
 
     ##
     # Input validation
@@ -292,28 +281,32 @@ class Model:
 
         return params
 
+    def _validate_data_or_quantiles(self, x):
+        if x is None:
+            raise ValueError("None is not valid as data/quantiles")
+        # Shorthand data specifications
+        try:
+            len(x)
+        except TypeError:
+            # Int/float like
+            was_scalar = True
+            x = [x]
+        else:
+            was_scalar = False
+        if isinstance(x, (list, tuple)):
+            if self.data is None:
+                x = np.asarray(x)
+            else:
+                # Convert to data's tensor type
+                x = hypney.utils.eagerpy.to_tensor(x, match_type=self.data)
+        return ep.astensor(x), was_scalar
+
     def validate_data(self, data) -> ep.TensorType:
         """Return an (n_events, n_observables) eagerpy tensor from data
         """
-        if data is None:
-            raise ValueError("None is not valid as data")
-        # Shorthand data specifications
-        try:
-            len(data)
-        except TypeError:
-            # Int/float like
-            self._data_is_single_scalar = True
-            data = [data]
-        if isinstance(data, (list, tuple)):
-            if self.data is None:
-                data = np.asarray(data)
-            else:
-                # Preserve existing tensor type
-                data = hypney.utils.eagerpy.to_tensor(data, match_type=self.data)
+        data, self._data_is_single_scalar = self._validate_data_or_quantiles(data)
         if len(data.shape) == 1:
             data = data[:, None]
-        data = ep.astensor(data)
-
         observed_dim = data.shape[1]
         if self.n_dim != observed_dim:
             raise ValueError(
@@ -324,24 +317,11 @@ class Model:
     def validate_quantiles(self, quantiles) -> ep.TensorType:
         """Return an (n_events) eagerpy tensor from quantiles
         """
-        # TODO: much of this duplicates validate_data...
-        if quantiles is None:
-            raise ValueError("None is not valid as quantiles")
-        try:
-            len(quantiles)
-        except TypeError:
-            self._quantiles_is_single_scalar = True
-            quantiles = [quantiles]
-        if isinstance(quantiles, (list, tuple)):
-            if self.data is None:
-                quantiles = np.asarray(quantiles)
-            else:
-                quantiles = hypney.utils.eagerpy.to_tensor(
-                    quantiles, match_type=self.data
-                )
-        # Note min <= max, maybe there is only one unique quantile
+        quantiles, self._quantiles_is_single_scalar = self._validate_data_or_quantiles(
+            quantiles
+        )
+        # Note min <= max, since there could be only one unique quantile
         assert 0 <= quantiles.min() <= quantiles.max() <= 1
-        quantiles = ep.astensor(quantiles)
         return quantiles
 
     ##
@@ -549,6 +529,7 @@ class Model:
     def _plot(self, method, x=None, params=None, auto_labels=True, **kwargs):
         """Plots differential rate of model"""
         import matplotlib.pyplot as plt
+
         discrete = self.observables[0].integer
 
         if self.n_dim > 1:
