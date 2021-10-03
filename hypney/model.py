@@ -549,6 +549,7 @@ class Model:
     def _plot(self, method, x=None, params=None, auto_labels=True, **kwargs):
         """Plots differential rate of model"""
         import matplotlib.pyplot as plt
+        discrete = self.observables[0].integer
 
         if self.n_dim > 1:
             raise NotImplementedError("Plotting only implemented for 1d models")
@@ -568,11 +569,10 @@ class Model:
 
             x = np.linspace(low, high, 500)
 
-            if self.observables[0].integer:
+            if discrete:
                 x = np.unique(np.round(x))
 
         y = getattr(self, method)(x, params=params)
-        discrete = self.observables[0].integer
         if discrete:
             # Use plt.hist rather than a line with drawstyle='steps', to
             # ensure the extreme bins also get drawn completely

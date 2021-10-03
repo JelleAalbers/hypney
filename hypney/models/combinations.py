@@ -74,7 +74,7 @@ class Mixture(AssociativeCombination):
             ), "Can't mix models with different observable names"
             new_min = min([m.observables[obs_i].min for m in self.models])
             new_max = max([m.observables[obs_i].max for m in self.models])
-            new_obs.append(hypney.Observable(name=obs_0.name, min=new_min, max=new_max))
+            new_obs.append(obs_0._replace(name=obs_0.name, min=new_min, max=new_max))
         return tuple(new_obs)
 
     def _init_data(self):
