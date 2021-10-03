@@ -116,18 +116,15 @@ class Statistic:
     def __call__(self, data=NotChanged, dist=NotChanged, params=NotChanged, **kwargs):
         return self.set(data=data, params=params, **kwargs)
 
-    def compute(self, data=NotChanged, params: dict = None, **kwargs):
-        return hypney.utils.eagerpy.ensure_raw(
-            self.compute_(data=data, params=params, **kwargs)
-        )
-
-    def compute_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+    def compute(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         self = self.set(data)
         if self.data is None:
             raise ValueError("Must provide data")
 
         params = self.model.validate_params(params, **kwargs)
-        return self._compute(params)
+
+        result = self._compute(params)
+        return hypney.utils.eagerpy.ensure_raw(result)
 
     def _compute(self, params):
         raise NotImplementedError
@@ -209,10 +206,12 @@ class IndependentStatistic(Statistic):
         self._result = self._compute(None)
         super()._init_data()
 
-    def compute_(self, params: dict = None, data=NotChanged, **kwargs):
+    def compute(self, params: dict = None, data=NotChanged, **kwargs):
         self = self.set(data)
         if self.data is None:
             raise ValueError("Must provide data")
+
+        result = self._result
 
         # If one of the params is a vector, we have to return a vector
         params = self.model.validate_params(params, **kwargs)
@@ -222,9 +221,10 @@ class IndependentStatistic(Statistic):
             except TypeError:
                 continue
             else:
-                return self._result * self.model.data.ones(len(x))
+                result = self._result * self.model.data.ones(len(x))
+                break
 
-        return self._result
+        return hypney.utils.eagerpy.ensure_raw(result)
 
 
 def _filter_params(params, allowed_names):

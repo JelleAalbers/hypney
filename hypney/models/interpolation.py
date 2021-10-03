@@ -177,15 +177,14 @@ class Interpolation(hypney.Model):
 
     def _call_anchor_method(self, method_name, param_tuple):
         """Call Model.method_name for anchor model at params"""
-        # Make sure to call non-underscored methods of the anchor models,
+        # Make sure to call external methods of the anchor models,
         # so they fill in their default params.
         # (especially convenient for non-interpolated params. Otherwise we'd
         #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
-
-        # We do have to call method_name + _, since we want to preserve eagerpy
+        result = getattr(self.anchor_models[param_tuple], method_name)()
         if method_name in self.data_methods_to_interpolate or method_name == "ppf":
-            method_name = method_name + "_"
-        return getattr(self.anchor_models[param_tuple], method_name)()
+            result = ep.astensor(result)
+        return result
 
     def _rvs(self, size: int, params: dict) -> ep.TensorType:
         anchor = self._params_to_anchor_tuple(params)

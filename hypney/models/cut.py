@@ -107,7 +107,9 @@ class CutModel(hypney.WrappedModel):
         ]
 
     def _corners_cdf(self, params: dict):
-        return self._orig_model.cdf_(data=self._corner_points(), params=params)
+        return ep.astensor(
+            self._orig_model.cdf(data=self._corner_points(), params=params)
+        )
 
     def _cut_efficiency(self, params: dict, corners_cdf=None):
         if self.cut is NoCut:
@@ -191,6 +193,8 @@ class CutModel(hypney.WrappedModel):
         # ppf(0) = c_low.
         orig_quantiles = self.quantiles * (c_high - c_low) + c_low
 
-        result = self._orig_model.ppf_(quantiles=orig_quantiles, params=params)
+        result = ep.astensor(
+            self._orig_model.ppf(quantiles=orig_quantiles, params=params)
+        )
 
         return result

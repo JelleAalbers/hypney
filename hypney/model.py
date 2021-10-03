@@ -7,7 +7,6 @@ import numpy as np
 
 import hypney
 from hypney import NotChanged
-from hypney.utils.eagerpy import ensure_raw
 
 export, __all__ = hypney.exporter()
 
@@ -325,7 +324,7 @@ class Model:
         return quantiles
 
     ##
-    # Simulation. These functions return numpy arrays, not eagerpy tensors.
+    # Simulation. These always return numpy arrays, not eagerpy tensors.
     ##
 
     @property
@@ -367,35 +366,56 @@ class Model:
 
     ##
     # Methods using data / quantiles
-    #   * _x: Internal function.
-    #       Takes and returns eagerpy tensors.
-    #       Uses self.data, assumes params have been validated.
-    #   * x_: 'Friendly' function for use in other hypney classes.
-    #       Flexible input, returns eagerpy tensors.
-    #   * x: External function, for users to call directly.
-    #       Flexible input, returm value has same type as data.
     ##
 
-    # TODO: make these decorators? See if pickle is OK with that..
-    def _return_like_data(self, result):
-        if self._data_is_single_scalar:
-            return result.item()
-        return result
-
-    def _return_like_quantiles(self, result):
-        if self._quantiles_is_single_scalar:
-            return result.item()
-        return result
-
-    def logpdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return ensure_raw(self.logpdf_(data=data, params=params, **kwargs))
-
-    def logpdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+    def _tensor_method(
+        self,
+        name,
+        params,
+        _inputs="data",
+        data=NotChanged,
+        quantiles=NotChanged,
+        **kwargs,
+    ):
         params = self.validate_params(params, **kwargs)
-        self = self(data=data)
-        if self.data is None:
-            raise ValueError("Provide data")
-        return self._return_like_data(self._logpdf(params))
+        self = self(data=data, quantiles=quantiles)
+        if getattr(self, _inputs) is None:
+            raise ValueError(f"Provide {_inputs}")
+
+        result = getattr(self, "_" + name)(params)
+
+        if getattr(self, f"_{_inputs}_is_single_scalar"):
+            result = result.item()
+        return hypney.utils.eagerpy.ensure_raw(result)
+
+    # External functions: flexible input, returm value has same type as data.
+
+    def logpdf(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        return self._tensor_method("logpdf", data=data, params=params, **kwargs)
+
+    def pdf(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        return self._tensor_method("pdf", data=data, params=params, **kwargs)
+
+    def diff_rate(
+        self, data=NotChanged, params: dict = None, **kwargs
+    ) -> ep.TensorType:
+        return self._tensor_method("diff_rate", data=data, params=params, **kwargs)
+
+    def cdf(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        return self._tensor_method("cdf", data=data, params=params, **kwargs)
+
+    def log_diff_rate(
+        self, data=NotChanged, params: dict = None, **kwargs
+    ) -> ep.TensorType:
+        return self._tensor_method("log_diff_rate", data=data, params=params, **kwargs)
+
+    def ppf(self, quantiles=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
+        return self._tensor_method(
+            "ppf", _inputs="quantiles", quantiles=quantiles, params=params, **kwargs
+        )
+
+    # Internal methods: Take and return eagerpy tensors,
+    #   use self.data / self.quantiles, assume params have been validated.
 
     def _logpdf(self, params: dict):
         if self._has_redefined("_log_diff_rate"):
@@ -406,118 +426,66 @@ class Model:
             "Model should implement _pdf, _logpdf, _diff_rate or _log_diff_rate"
         )
 
-    def pdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return ensure_raw(self.pdf_(data=data, params=params, **kwargs))
-
-    def pdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
-        params = self.validate_params(params, **kwargs)
-        self = self(data=data)
-        if self.data is None:
-            raise ValueError("Provide data")
-        return self._return_like_data(self._pdf(params))
-
     def _pdf(self, params: dict):
         if self._has_redefined("_diff_rate"):
             return self._diff_rate(params) / self._rate(params)
         return ep.exp(self._logpdf(params))
-
-    def log_diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
-        return ensure_raw(self.log_diff_rate_(data=data, params=params, **kwargs))
-
-    def log_diff_rate_(
-        self, data=NotChanged, params: dict = None, **kwargs
-    ) -> ep.TensorType:
-        params = self.validate_params(params, **kwargs)
-        self = self(data=data)
-        if self.data is None:
-            raise ValueError("Provide data")
-        return self._return_like_data(self._log_diff_rate(params))
 
     def _log_diff_rate(self, params: dict):
         if self._has_redefined("_logpdf"):
             return self._logpdf(params=params) + self._log_rate(params=params)
         return ep.log(self._diff_rate(params=params))
 
-    def diff_rate(self, data=NotChanged, params: dict = None, **kwargs):
-        return ensure_raw(self.diff_rate_(data=data, params=params, **kwargs))
-
-    def diff_rate_(
-        self, data=NotChanged, params: dict = None, **kwargs
-    ) -> ep.TensorType:
-        params = self.validate_params(params, **kwargs)
-        self = self(data=data)
-        if self.data is None:
-            raise ValueError("Provide data")
-        return self._return_like_data(self._diff_rate(params))
-
     def _diff_rate(self, params: dict):
         if self._has_redefined("_pdf"):
             return self._pdf(params=params) * self._rate(params=params)
         return ep.exp(self._log_diff_rate(params=params))
 
-    def cdf(self, data=NotChanged, params: dict = None, **kwargs):
-        return ensure_raw(self.cdf_(data=data, params=params, **kwargs))
-
-    def cdf_(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
-        params = self.validate_params(params, **kwargs)
-        self = self(data=data)
-        if self.data is None:
-            raise ValueError("Provide data")
-        return self._return_like_data(self._cdf(params))
-
     def _cdf(self, params: dict):
         raise NotImplementedError
-
-    def ppf(self, quantiles=NotChanged, params: dict = None, **kwargs):
-        return ensure_raw(self.ppf_(quantiles=quantiles, params=params, **kwargs))
-
-    def ppf_(
-        self, quantiles=NotChanged, params: dict = None, **kwargs
-    ) -> ep.TensorType:
-        params = self.validate_params(params, **kwargs)
-        self = self(quantiles=quantiles)
-        if self.quantiles is None:
-            raise ValueError("Provide quantiles")
-        return self._return_like_quantiles(self._ppf(params))
 
     def _ppf(self, params: dict):
         raise NotImplementedError
 
     ##
     # Methods not using data; return a simple float
-    # As above, _x are internal functions (use self.data)
-    # whereas x are external functions (do input validation, set data if needed)
     ##
 
-    def rate(self, params: dict = None, **kwargs) -> float:
+    def _scalar_method(self, name, params, **kwargs):
         params = self.validate_params(params, **kwargs)
-        return self._rate(params)
+        return getattr(self, "_" + name)(params)
+
+    # External functions: validate params and set data if needed
+
+    def rate(self, params: dict = None, **kwargs) -> float:
+        return self._scalar_method("rate", params, **kwargs)
+
+    def mean(self, params: dict = None, **kwargs) -> float:
+        return self._scalar_method("mean", params, **kwargs)
+
+    def var(self, params: dict = None, **kwargs) -> float:
+        return self._scalar_method("var", params, **kwargs)
+
+    def std(self, params: dict = None, **kwargs) -> float:
+        return self._scalar_method("std", params, **kwargs)
+
+    # Internal functions: use self.data, return scalars
+    # (or maybe tensors if parameters are vectorized... not consistent yet)
 
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
     def _log_rate(self, params: dict):
+        # This is awkward, since rate may or may not return a scalar
         return hypney.utils.eagerpy.to_tensor(
-            self.rate(params), match_type=self.data
+            self._rate(params), match_type=self.data
         ).log()
-
-    def mean(self, params: dict = None, **kwargs) -> float:
-        params = self.validate_params(params, **kwargs)
-        return self._mean(params)
 
     def _mean(self, params: dict):
         return NotImplementedError
 
-    def var(self, params: dict = None, **kwargs) -> float:
-        params = self.validate_params(params, **kwargs)
-        return self._var(params)
-
     def _var(self, params: dict):
         return self._std(params) ** 2
-
-    def std(self, params: dict = None, **kwargs) -> float:
-        params = self.validate_params(params, **kwargs)
-        return self._std(params)
 
     def _std(self, params: dict):
         return NotImplementedError
