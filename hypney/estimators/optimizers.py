@@ -13,17 +13,16 @@ class MinimumAndValue(hypney.Estimator):
     sign = 1
 
     def _compute(self):
-        guess = np.array([p.default for p in self._free_params()])
+        guess = np.array([p.default.raw.item() for p in self._free_params()])
         bounds = [(p.min, p.max) for p in self._free_params()]
 
         if isinstance(self.stat.data, ep.NumPyTensor):
             jac = None
 
             def fun(params):
-                result = self.sign * self.stat._compute(
+                return self.sign * self.stat.compute(
                     params=self._param_sequence_to_dict(params)
                 )
-                return ep_util.np64(result)
 
         else:
             jac = True
@@ -31,7 +30,7 @@ class MinimumAndValue(hypney.Estimator):
             def _fun(params):
                 result, grad = ep.value_and_grad(
                     lambda param_tensor: self.sign
-                    * self.stat._compute(
+                    * self.stat.compute(
                         params=self._param_sequence_to_dict(param_tensor)
                     ),
                     params,

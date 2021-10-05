@@ -1,9 +1,11 @@
 from copy import copy
 import functools
+import math
 import typing as ty
 
 import eagerpy as ep
 import numpy as np
+from numpy.core.fromnumeric import prod
 
 import hypney
 from hypney import NotChanged
@@ -39,6 +41,17 @@ class Model:
     @property
     def defaults(self):
         return {p.name: p.default for p in self.param_specs}
+
+    @property
+    def backend(self):
+        return hypney.utils.eagerpy.tensorlib(self.data)
+
+    @property
+    def sample_shape(self):
+        # Assumes event_shape is length-1
+        if self.data is None:
+            return (1,)
+        return self.data.shape[:-1]
 
     ##
     # Initialization
@@ -220,8 +233,6 @@ class Model:
         """
         if not params and not kwargs:
             return self
-        if params is None:
-            params = dict()
         if isinstance(params, str):
             params = (params,)
         if isinstance(params, (list, tuple)):
@@ -254,7 +265,7 @@ class Model:
     ##
 
     def validate_params(self, params: dict = None, set_defaults=True, **kwargs) -> dict:
-        """Return dictionary of parameters for the model.
+        """Return dictionary of parameters for the model
 
         Args:
          - params: Dictionary of parameters
@@ -278,6 +289,32 @@ class Model:
         if spurious:
             raise ValueError(f"Unknown parameters {spurious} passed")
 
+        # Convert all params to tensors
+        params = {pname: self._to_tensor(x) for pname, x in params.items()}
+
+        # Make all params the same shape (batch_shape)
+        param_shapes = {pname: x.shape for pname, x in params.items()}
+        batch_shape = max(param_shapes.values(), key=lambda s: len(s), default=tuple())
+        params = {
+            k: hypney.utils.eagerpy.broadcast_to(v, batch_shape)
+            for k, v in params.items()
+        }
+        return params
+
+    def _batch_shape(self, params):
+        if not len(params):
+            return tuple()
+        else:
+            return params[self.param_names[0]].shape
+
+    def _expand_params(self, params):
+        """"Return params expanded to (batch_shape, [1] * len(sample_shape))
+        """
+        # Add len(sample_shape) 1s
+        # to param shape for broadcasting with data.
+        for _ in self.sample_shape:
+            params = {pname: x[..., None] for pname, x in params.items()}
+
         return params
 
     def _validate_data_or_quantiles(self, x):
@@ -293,25 +330,24 @@ class Model:
         else:
             was_scalar = False
         if isinstance(x, (list, tuple)):
-            if self.data is None:
-                x = np.asarray(x)
-            else:
-                # Convert to data's tensor type
-                x = hypney.utils.eagerpy.to_tensor(x, match_type=self.data)
+            x = self._to_tensor(x)
         return ep.astensor(x), was_scalar
 
     def validate_data(self, data) -> ep.TensorType:
-        """Return an (n_events, n_observables) eagerpy tensor from data
+        """Return eagerpy tensor from data
         """
         data, self._data_is_single_scalar = self._validate_data_or_quantiles(data)
         if len(data.shape) == 1:
             data = data[:, None]
-        observed_dim = data.shape[1]
+        observed_dim = data.shape[-1]
         if self.n_dim != observed_dim:
             raise ValueError(
                 f"Data should have {self.n_dim} observables per event, got {observed_dim}"
             )
         return data
+
+    def _to_tensor(self, x):
+        return hypney.utils.eagerpy.to_tensor(x, match_type=self.data)
 
     def validate_quantiles(self, quantiles) -> ep.TensorType:
         """Return an (n_events) eagerpy tensor from quantiles
@@ -348,7 +384,7 @@ class Model:
 
         else:
             mu = self._rate(params)
-            n = np.random.poisson(mu)
+            n = np.random.poisson(mu.raw)
             data = self._rvs(size=n, params=params)
             assert len(data) == n
 
@@ -370,22 +406,31 @@ class Model:
 
     def _tensor_method(
         self,
+        # Have to pass the method *name*, since self will change
         name,
         params,
-        _inputs="data",
+        _input_name="data",
         data=NotChanged,
         quantiles=NotChanged,
         **kwargs,
     ):
         params = self.validate_params(params, **kwargs)
         self = self(data=data, quantiles=quantiles)
-        if getattr(self, _inputs) is None:
-            raise ValueError(f"Provide {_inputs}")
+        if getattr(self, _input_name) is None:
+            raise ValueError(f"Provide {_input_name}")
 
-        result = getattr(self, "_" + name)(params)
+        expanded_params = self._expand_params(params)
 
-        if getattr(self, f"_{_inputs}_is_single_scalar"):
-            result = result.item()
+        # returns (batch_shape, sample_shape)
+        result = getattr(self, "_" + name)(expanded_params)
+
+        if getattr(self, f"_{_input_name}_is_single_scalar"):
+            if self._batch_shape(params):
+                # Remove sample_shape = 1 from end
+                result = result[..., 0]
+            else:
+                result = result.item()
+
         return hypney.utils.eagerpy.ensure_raw(result)
 
     # External functions: flexible input, returm value has same type as data.
@@ -411,11 +456,11 @@ class Model:
 
     def ppf(self, quantiles=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         return self._tensor_method(
-            "ppf", _inputs="quantiles", quantiles=quantiles, params=params, **kwargs
+            "ppf", _input_name="quantiles", quantiles=quantiles, params=params, **kwargs
         )
 
     # Internal methods: Take and return eagerpy tensors,
-    #   use self.data / self.quantiles, assume params have been validated.
+    # params have been validated and are (batch_dim, 1) tensors
 
     def _logpdf(self, params: dict):
         if self._has_redefined("_log_diff_rate"):
@@ -448,38 +493,57 @@ class Model:
         raise NotImplementedError
 
     ##
-    # Methods not using data; return a simple float
+    # Methods not using data; return (batch_dims,) tensor
+    # or scalar if batch_dims == tuple()
     ##
 
-    def _scalar_method(self, name, params, **kwargs):
+    def _scalar_method(self, method, params, **kwargs):
         params = self.validate_params(params, **kwargs)
-        return getattr(self, "_" + name)(params)
 
-    # External functions: validate params and set data if needed
+        # Scalar methods (e.g. from statistics) might still touch data
+        # / be used together with tensor methods that do.
+        expanded_params = self._expand_params(params)
+
+        # should return (batch_shape, ones(sample_shape))...
+        result = method(expanded_params)
+
+        # ... or a scalar, in case the method didn't use params at all
+        # if so, broadcast result as a tensor
+        batch_shape = self._batch_shape(params)
+        if not hasattr(result, 'shape') or not len(result.shape):
+            result = result * self._expand_params(dict(dummy=self.backend.ones(batch_shape)))['dummy']
+
+        # Remove ones(sample_shape) and eagerpy wrapper
+        for _ in self.sample_shape:
+            result = result[...,0]
+        result = hypney.utils.eagerpy.ensure_raw(result)
+
+        if not batch_shape:
+            # Un-tensorify
+            return result.item()
+        return result
+
+    # External functions: validate params if needed
 
     def rate(self, params: dict = None, **kwargs) -> float:
-        return self._scalar_method("rate", params, **kwargs)
+        return self._scalar_method(self._rate, params, **kwargs)
 
     def mean(self, params: dict = None, **kwargs) -> float:
-        return self._scalar_method("mean", params, **kwargs)
+        return self._scalar_method(self._mean, params, **kwargs)
 
     def var(self, params: dict = None, **kwargs) -> float:
-        return self._scalar_method("var", params, **kwargs)
+        return self._scalar_method(self._var, params, **kwargs)
 
     def std(self, params: dict = None, **kwargs) -> float:
-        return self._scalar_method("std", params, **kwargs)
+        return self._scalar_method(self._std, params, **kwargs)
 
-    # Internal functions: use self.data, return scalars
-    # (or maybe tensors if parameters are vectorized... not consistent yet)
+    # Internal functions
 
     def _rate(self, params: dict):
         return params[hypney.DEFAULT_RATE_PARAM.name]
 
     def _log_rate(self, params: dict):
-        # This is awkward, since rate may or may not return a scalar
-        return hypney.utils.eagerpy.to_tensor(
-            self._rate(params), match_type=self.data
-        ).log()
+        return self._rate(params).log()
 
     def _mean(self, params: dict):
         return NotImplementedError
@@ -495,7 +559,7 @@ class Model:
     ##
 
     def _plot(self, method, x=None, params=None, auto_labels=True, **kwargs):
-        """Plots differential rate of model"""
+        """Plots result of Model.method"""
         import matplotlib.pyplot as plt
 
         discrete = self.observables[0].integer

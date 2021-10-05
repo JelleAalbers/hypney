@@ -114,6 +114,14 @@ You can simulate new data with the ``rvs`` method, which, like in ``scipy.stats`
 
 Models also have a ``mean`` and ``std`` method, which return the expected mean and standard deviation of an infinite dataset of observables. For complex models these may be very slow, or raise a NotImplementedError. For models with multiple observables their behaviour is currently undefined.
 
+Hypney's model methods follow the same broadcasting rules as `scipy.stats <https://docs.scipy.org/doc/scipy/reference/tutorial/stats.html#broadcasting>`_. For example:
+
+.. code-block:: python
+
+    >>> hp.uniform().ppf([0.1, 0.5, 0.9], loc=[[10], [11]])
+    array([[10.1, 10.5, 10.9],
+           [11.1, 11.5, 11.9]])
+
 
 Plotting
 --------

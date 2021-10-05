@@ -56,9 +56,7 @@ class ConfidenceInterval(hypney.Estimator):
         # Evaluate statistic at anchors
         # (statistic is vectorized over params)
         anchor_pars = {
-            self.poi: hypney.utils.eagerpy.to_tensor(
-                self.anchors, match_type=self.stat.data
-            )
+            self.poi: stat.model._to_tensor(self.anchors).raw
         }
         self.stat_at_anchors = self.stat.compute(params=anchor_pars)
 

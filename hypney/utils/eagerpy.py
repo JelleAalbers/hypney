@@ -13,6 +13,8 @@ export, __all__ = hypney.exporter()
 
 @export
 def to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
+    if match_type is None:
+        match_type = ep.numpy.empty(0)
     if isinstance(x, type(match_type)):
         return x
     if not isinstance(match_type, ep.Tensor):
@@ -89,6 +91,11 @@ def average_axis0(x, weights=None):
 @export
 def split(x, *args, **kwargs):
     return [ep.astensor(x) for x in tensorlib(x).split(x.raw, *args, **kwargs)]
+
+
+@export
+def broadcast_to(x, shape):
+    return tensorlib(x).broadcast_to(x.raw, shape)
 
 
 @export

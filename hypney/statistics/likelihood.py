@@ -14,8 +14,10 @@ class LogLikelihood(hypney.Statistic):
             # _log_diff_rate(params=params).sum() seems less stable...
             # Maybe this depends on whether pdf or diff_rate is fundamental for
             # a model?
-            len(self.data) * self.model._log_rate(params)
-            + self.model._logpdf(params=params).sum()
+            self.data.shape[-2] * self.model._log_rate(params)
+            # keepdims=True since params has trailing (1,)... :-(
+            + self.model._logpdf(params=params).sum(axis=-1, keepdims=True)
+            # TODO: axis=-1 assumes sample_shape is 1d!!
         )
         # Somehow the scipy optimizer is fine with -inf,
         # but not with accurate but insanely large values??

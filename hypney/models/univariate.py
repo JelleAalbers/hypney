@@ -31,8 +31,11 @@ class UnivariateDistribution(hypney.Model):
             self._dists = dict(scipy=getattr(scipy_stats, self.scipy_name, None))
 
     def _dist_params(self, params):
-        # Remove rate parameter; scipy dists have no such concept
-        return {k: v for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name}
+        # Extract raw tensor, and remove rate parameter
+        # (scipy dists have no such concept)
+        return {
+            k: v.raw for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name
+        }
 
     def dist_for_data(self):
         """Return distribution from library appropriate to self.data"""
@@ -122,10 +125,10 @@ class UnivariateDistribution(hypney.Model):
     # Methods not using data
 
     def _mean(self, params):
-        return self.dist_for_data().mean(**self._dist_params(params))
+        return self._to_tensor(self.dist_for_data().mean(**self._dist_params(params)))
 
     def _std(self, params):
-        return self.dist_for_data().std(**self._dist_params(params))
+        return self._to_tensor(self.dist_for_data().std(**self._dist_params(params)))
 
 
 class UnivariateDiscreteDistribution(UnivariateDistribution):
@@ -156,6 +159,12 @@ class TorchDistributionWrapper:
 
     def _patch_params(self, params, data_tensor):
         params = self.transform(params)
+
+        # Model ensured params were all tensors of the same shape
+        if not params:
+            param_shape = tuple()
+        else:
+            param_shape = params[list(params.keys())[0]].shape
 
         if self.patch_loc:
             x0 = params["loc"]

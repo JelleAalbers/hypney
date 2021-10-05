@@ -25,6 +25,10 @@ def test_likelihood():
     np.testing.assert_equal(
         lf.compute(rate=rates), np.array([lf.compute(rate=x) for x in rates])
     )
+    locs = np.linspace(-2, 2, 10)
+    np.testing.assert_equal(
+        lf.compute(loc=locs), np.array([lf.compute(loc=x) for x in locs])
+    )
 
 
 def test_lr():

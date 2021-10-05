@@ -173,7 +173,8 @@ class Interpolation(hypney.Model):
             return result
 
     def _params_to_anchor_tuple(self, params):
-        return tuple([params[p.name] for p in self.param_specs if p.anchors])
+        # TODO: this will fail for non-trivial batch_shape!
+        return tuple([params[p.name].raw.item() for p in self.param_specs if p.anchors])
 
     def _call_anchor_method(self, method_name, param_tuple):
         """Call Model.method_name for anchor model at params"""
@@ -186,7 +187,7 @@ class Interpolation(hypney.Model):
             result = ep.astensor(result)
         return result
 
-    def _rvs(self, size: int, params: dict) -> ep.TensorType:
+    def _rvs(self, size: int, params: dict):
         anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             # Dig into interpolator to get weight for each anchor,
@@ -195,7 +196,7 @@ class Interpolation(hypney.Model):
             raise NotImplementedError("Can only simulate at anchor models")
         return self.anchor_models[anchor]._rvs(size=size)
 
-    def _simulate(self, params: dict = None) -> ep.TensorType:
+    def _simulate(self, params: dict = None):
         anchor = self._params_to_anchor_tuple(params)
         if anchor not in self.anchor_models:
             raise NotImplementedError("Can only simulate at anchor models")

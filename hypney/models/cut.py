@@ -182,19 +182,20 @@ class CutModel(hypney.WrappedModel):
     def _cdf(self, params: dict):
         if self.n_dim > 1:
             raise NotImplementedError("nD cut CDF still todo...")
-        c_low, c_high = self._corners_cdf(params)
+        c_low, c_high = self._corners_cdf(params)[0]
         return ((self._orig_model._cdf(params) - c_low) / (c_high - c_low)).clip(0, 1)
 
     def _ppf(self, params: dict):
-        c_low, c_high = self._corners_cdf(params)
+        c_low, c_high = self._corners_cdf(params)[0]
 
         # self.quantiles == (orig_quantiles - c_low).clip(0, None) / (c_high - c_low)
         # Cut always shrinks region and 0 <= quantiles <= 1, so clip never binds
         # ppf(0) = c_low.
         orig_quantiles = self.quantiles * (c_high - c_low) + c_low
 
+        # Don't call the external .ppf, it would expand the parameters once more.
         result = ep.astensor(
-            self._orig_model.ppf(quantiles=orig_quantiles, params=params)
+            self._orig_model.set(quantiles=orig_quantiles)._ppf(params=params)
         )
 
         return result

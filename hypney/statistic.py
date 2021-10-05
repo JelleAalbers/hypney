@@ -117,14 +117,8 @@ class Statistic:
         return self.set(data=data, params=params, **kwargs)
 
     def compute(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
-        self = self.set(data)
-        if self.data is None:
-            raise ValueError("Must provide data")
-
-        params = self.model.validate_params(params, **kwargs)
-
-        result = self._compute(params)
-        return hypney.utils.eagerpy.ensure_raw(result)
+        self = self.set(data=data)
+        return self.model._scalar_method(self._compute, params=params, **kwargs)
 
     def _compute(self, params):
         raise NotImplementedError
@@ -153,6 +147,7 @@ class Statistic:
             except Exception as e:
                 warnings.warn(f"Exception during test statistic evaluation: {e}")
                 results[i] = float("nan")
+                raise
         return results
 
     ##
@@ -190,41 +185,6 @@ class Statistic:
             progress=progress,
             methods=methods,
         )
-
-
-@export
-class IndependentStatistic(Statistic):
-    """Statistic depending only on data, not on any parameters.
-
-    The distribution may still depend on parameters.
-
-    For speed, the result will be precomputed as soon as data is known.
-    """
-
-    def _init_data(self):
-        # Precompute result on the data.
-        self._result = self._compute(None)
-        super()._init_data()
-
-    def compute(self, params: dict = None, data=NotChanged, **kwargs):
-        self = self.set(data)
-        if self.data is None:
-            raise ValueError("Must provide data")
-
-        result = self._result
-
-        # If one of the params is a vector, we have to return a vector
-        params = self.model.validate_params(params, **kwargs)
-        for x in list(params.values()):
-            try:
-                len(x)
-            except TypeError:
-                continue
-            else:
-                result = self._result * self.model.data.ones(len(x))
-                break
-
-        return hypney.utils.eagerpy.ensure_raw(result)
 
 
 def _filter_params(params, allowed_names):
