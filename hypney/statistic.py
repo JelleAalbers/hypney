@@ -147,7 +147,6 @@ class Statistic:
             except Exception as e:
                 warnings.warn(f"Exception during test statistic evaluation: {e}")
                 results[i] = float("nan")
-                raise
         return results
 
     ##
