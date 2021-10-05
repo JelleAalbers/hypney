@@ -66,6 +66,7 @@ class Model:
         param_specs=NotChanged,
         observables=NotChanged,
         quantiles=None,
+        validate_defaults=True,
         **kwargs,
     ):
         if name is not NotChanged:
@@ -77,7 +78,7 @@ class Model:
         if observables is not NotChanged:
             self.observables = observables
 
-        self._validate_and_set_defaults(params, **kwargs)
+        self._set_defaults(params, validate_defaults=validate_defaults, **kwargs)
         self._set_data(data)
         self._set_quantiles(quantiles)
 
@@ -115,17 +116,22 @@ class Model:
         """Initialize self.quantiles (either from construction or data change)"""
         pass
 
-    def _validate_and_set_defaults(
-        self, new_defaults: dict = NotChanged,
-        **kwargs: dict,
+    def _set_defaults(
+        self,
+        params: dict = NotChanged,
+        validate_defaults=True,
+        **kwargs
     ):
-        if new_defaults == NotChanged:
-            new_defaults = dict()
-        if new_defaults or kwargs:
-            new_defaults = self.validate_params(new_defaults, **kwargs)
-            self.param_specs = tuple(
-                [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
-            )
+        if validate_defaults:
+            params = self.defaults
+        if params is NotChanged and not kwargs:
+            return
+        if params is NotChanged:
+            params = dict()
+        new_defaults = self.validate_params(params, **kwargs)
+        self.param_specs = tuple(
+            [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
+        )
 
     def _has_redefined(self, method_name, from_base=None):
         """Returns if method_name is redefined from Model.method_name"""
@@ -164,7 +170,10 @@ class Model:
 
         new_self = copy(self)
         Model.__init__(
-            new_self, name=name, data=data, quantiles=quantiles, params=params, **kwargs
+            new_self, name=name, data=data, quantiles=quantiles,
+            # Only re-validate the defaults if new defaults were actually given
+            validate_defaults=(params != NotChanged and _merge_dicts(params, kwargs)),
+            params=params, **kwargs
         )
         return new_self
 
@@ -266,7 +275,7 @@ class Model:
     # Input validation
     ##
 
-    def validate_params(self, params: dict = None, set_defaults=True, validate_defaults=False, **kwargs) -> dict:
+    def validate_params(self, params: dict = None, set_defaults=True, **kwargs) -> dict:
         """Return dictionary of parameters for the model
 
         Args:
@@ -283,12 +292,13 @@ class Model:
         params = _merge_dicts(params, kwargs)
 
         if set_defaults:
-            if not params and not validate_defaults:
+            if not params:
                 # No params passed at all; we can just return defaults..
                 # .. if the params have been passed through validate once,
                 # to convert them into tensors.
-                if not self.defaults or isinstance(self.defaults[self.param_names[0]], ep.Tensor):
-                    return self.defaults
+                if self.defaults and not isinstance(self.defaults[self.param_names[0]], ep.Tensor):
+                    raise ValueError("Defaults have not been validated!")
+                return self.defaults
             for p in self.param_specs:
                 params.setdefault(p.name, p.default)
 
