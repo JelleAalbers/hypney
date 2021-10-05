@@ -17,7 +17,6 @@ class LogLikelihood(hypney.Statistic):
             self.data.shape[-2] * self.model._log_rate(params)
             # keepdims=True since params has trailing (1,)... :-(
             + self.model._logpdf(params=params).sum(axis=-1, keepdims=True)
-            # TODO: axis=-1 assumes sample_shape is 1d!!
         )
         # Somehow the scipy optimizer is fine with -inf,
         # but not with accurate but insanely large values??

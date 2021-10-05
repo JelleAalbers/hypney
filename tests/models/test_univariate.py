@@ -105,3 +105,48 @@ def test_poisson():
     data = m.simulate()
     np.testing.assert_equal(m.pdf(data), stats.poisson(mu=3).pmf(data[:, 0]))
     assert m.rate() == 100.0
+
+
+def test_vectorization():
+    m = hypney.models.norm()
+
+    ##
+    # Multiple parameters (nontrivial batch_shape)
+    ##
+
+    # Param vector
+    data = np.array([1, 2, 3])
+    rates = [0, 1, 2]
+    m = m(data=data)
+    np.testing.assert_equal(m.rate(rate=rates), [m.rate(rate=x) for x in rates])
+    np.testing.assert_equal(
+        m.diff_rate(rate=rates), np.stack([m.diff_rate(rate=x) for x in rates])
+    )
+
+    # Param matrix
+    rates = [0, 1, 2]
+    locs = [0, 1, 3, 2]
+    _r, _l = np.meshgrid(rates, locs, indexing="ij")
+    np.testing.assert_equal(
+        m.rate(rate=_r, loc=_l), [[m.rate(rate=x, loc=y) for y in locs] for x in rates]
+    )
+
+    # TODO: two vectors with [None,:] and [:,None], auto-broadcasted up
+    # (None,: might be reversed).
+    # Failing due to dumb batch_shape detection in validate_params.
+    # Lots of edge cases, e.g. (10, 1,), (1, 1) and (10,)...
+    # _r, _l = np.array(rates)[:,None], np.array(locs)[None,:]
+    # np.testing.assert_equal(
+    #     m.rate(rate=_r, loc=_l),
+    #     [[m.rate(rate=x, loc=y) for y in locs] for x in rates])
+
+    ##
+    # Multiple datasets (nontrivial sample_shape)
+    # This is experimental...
+    ##
+    data = np.array([[1, 2, 3], [3, 4, 5]])[..., None]
+    assert data.shape == (2, 3, 1)
+    pdf = m.pdf(data)
+    assert isinstance(pdf, np.ndarray)
+    assert pdf.shape == (2, 3)
+    np.testing.assert_equal(pdf, [m.pdf(data[0]), m.pdf(data[1])])

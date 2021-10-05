@@ -100,21 +100,22 @@ class UnivariateDistribution(hypney.Model):
             raise NotImplementedError(
                 f"This version of scipy does not have {self.scipy_name}"
             )
-        return self._dists["scipy"].rvs(size=size, **self._dist_params(params))[:, None]
+        return self._dists["scipy"].rvs(size=size, **self._dist_params(params))[..., None]
 
     def _logpdf(self, params: dict) -> ep.TensorType:
         dist = self.dist_for_data()
         logpdf = dist.logpdf if hasattr(dist, "logpdf") else dist.logpmf
-        return ep.astensor(logpdf(self.data[:, 0].raw, **self._dist_params(params)))
+        return ep.astensor(logpdf(self.data[..., 0].raw, **self._dist_params(params)))
 
     def _pdf(self, params: dict) -> ep.TensorType:
         dist = self.dist_for_data()
         pdf = dist.pdf if hasattr(dist, "pdf") else dist.pmf
-        return ep.astensor(pdf(self.data[:, 0].raw, **self._dist_params(params)))
+        print(self.data.shape)
+        return ep.astensor(pdf(self.data[..., 0].raw, **self._dist_params(params)))
 
     def _cdf(self, params: dict) -> np.ndarray:
         return ep.astensor(
-            self.dist_for_data().cdf(self.data[:, 0].raw, **self._dist_params(params))
+            self.dist_for_data().cdf(self.data[..., 0].raw, **self._dist_params(params))
         )
 
     def _ppf(self, params: dict) -> np.ndarray:

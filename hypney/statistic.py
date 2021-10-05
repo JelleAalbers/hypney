@@ -119,6 +119,9 @@ class Statistic:
         return self.model._scalar_method(self._compute, params=params, **kwargs)
 
     def _compute(self, params):
+        # data has shape ([n_datasets?], n_events, n_observables)
+        # params have shape ([batch_shape], 1)
+        # result has to be shape ([n_datasets?], [batch_shape], 1)
         raise NotImplementedError
 
     ##

@@ -6,7 +6,7 @@ export, __all__ = hypney.exporter()
 @export
 class Count(hypney.Statistic):
     def _compute(self, params):
-        return len(self.data)
+        return self.data.shape[-2]
 
     def _build_dist(self):
         return hypney.models.poisson()
