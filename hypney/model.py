@@ -116,14 +116,16 @@ class Model:
         pass
 
     def _validate_and_set_defaults(
-        self, new_defaults: dict = NotChanged, **kwargs: dict
+        self, new_defaults: dict = NotChanged,
+        **kwargs: dict,
     ):
         if new_defaults == NotChanged:
             new_defaults = dict()
-        new_defaults = self.validate_params(new_defaults, **kwargs)
-        self.param_specs = tuple(
-            [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
-        )
+        if new_defaults or kwargs:
+            new_defaults = self.validate_params(new_defaults, **kwargs)
+            self.param_specs = tuple(
+                [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
+            )
 
     def _has_redefined(self, method_name, from_base=None):
         """Returns if method_name is redefined from Model.method_name"""
@@ -264,7 +266,7 @@ class Model:
     # Input validation
     ##
 
-    def validate_params(self, params: dict = None, set_defaults=True, **kwargs) -> dict:
+    def validate_params(self, params: dict = None, set_defaults=True, validate_defaults=False, **kwargs) -> dict:
         """Return dictionary of parameters for the model
 
         Args:
@@ -281,6 +283,12 @@ class Model:
         params = _merge_dicts(params, kwargs)
 
         if set_defaults:
+            if not params and not validate_defaults:
+                # No params passed at all; we can just return defaults..
+                # .. if the params have been passed through validate once,
+                # to convert them into tensors.
+                if not self.defaults or isinstance(self.defaults[self.param_names[0]], ep.Tensor):
+                    return self.defaults
             for p in self.param_specs:
                 params.setdefault(p.name, p.default)
 

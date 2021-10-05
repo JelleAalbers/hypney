@@ -90,8 +90,6 @@ class Statistic:
         return self.model.data
 
     def _set_defaults(self, params=NotChanged, **kwargs):
-        if params is NotChanged and not len(kwargs):
-            return
         self.model = self.model(params=params, **kwargs)
 
     def set(self, data=NotChanged, dist=NotChanged, params=NotChanged, **kwargs):
@@ -138,12 +136,14 @@ class Statistic:
             it to statistic. Useful to convert to an autograd library,
             e.g. torch.from_numpy / tf.convert_to_tensor.
         """
-        params = self.model.validate_params(params, **kwargs)
+        # Set defaults once to avoid re-validation
+        self = self.set(params=params, **kwargs)
+
         results = np.zeros(size)
         for i in range(size):
-            sim_data = transform(self.model._simulate(params=params))
+            sim_data = transform(self.model._simulate(params=self.model.defaults))
             try:
-                results[i] = self.compute(data=sim_data, params=params)
+                results[i] = self.compute(data=sim_data)
             except Exception as e:
                 warnings.warn(f"Exception during test statistic evaluation: {e}")
                 results[i] = float("nan")
