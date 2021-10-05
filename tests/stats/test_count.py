@@ -23,3 +23,16 @@ def test_count():
     # Test pararms are still filtered
     with pytest.raises(ValueError):
         stat(kwarg=0)
+
+    # Test building new stats with .set
+    stat2 = stat.set(rate=5)
+    assert stat2.model != stat.model
+    np.testing.assert_equal(
+        stat2.model.defaults["rate"].numpy(), 5 * stat.model.defaults["rate"].numpy()
+    )
+
+    stat3 = stat.set(params=dict(rate=7))
+    assert stat3.model != stat.model
+    np.testing.assert_equal(
+        stat3.model.defaults["rate"].numpy(), 7 * stat.model.defaults["rate"].numpy()
+    )

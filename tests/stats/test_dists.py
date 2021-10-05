@@ -16,13 +16,11 @@ def test_dist_from_toys():
     m = hypney.models.norm(rate=10)
     count = hypney.statistics.Count(m)
 
-    dist = count.dist_from_toys(n_toys=5000)
+    dist = count.dist_from_toys(n_toys=2000)
     assert (dist.mean() - 10) / 10 < 0.1
 
-    dist = count.interpolate_dist_from_toys(
-        anchors=dict(rate=[1, 2, 5, 10, 20, 50, 100]), methods="mean"
-    )
-    assert 14 < dist(rate=15).mean() < 16
+    dist = count.dist_from_toys(rate=20, n_toys=2000)
+    assert (dist.mean() - 20) / 20 < 0.1
 
     # Setting this distribution just adds some dummy params
     c2 = count.set(dist=dist)

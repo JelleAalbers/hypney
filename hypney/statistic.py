@@ -158,18 +158,26 @@ class Statistic:
         # Default assumption is that distribution is parameter-free
         return dict()
 
-    def dist_from_toys(self, params=None, n_toys=1000, transform=np.asarray, **kwargs):
+    def dist_from_toys(self, params=NotChanged, n_toys=1000, transform=np.asarray,
+                       options=None, **kwargs):
         """Return an estimated distribution of the statistic given params
         from running simulations.
 
-        Note: kwargs are passed to hypney.models.from_samples, pass params as dict!
         """
+        if options is None:
+            options = dict()
         # Use a *lot* of bins by default, since we're most interested
         # in the cdf/ppf
-        kwargs.setdefault("bin_count_multiplier", 10)
+        options.setdefault("bin_count_multiplier", 10)
+
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
-        toys = self.set(params=params).rvs(n_toys, transform=transform)
-        dist = hypney.models.from_samples(toys, **kwargs)
+        self = self.set(params=params, **kwargs)
+        print(self, params, kwargs, self.model.defaults)
+        toys = self.rvs(n_toys, transform=transform)
+        print("dist_from_toys called with ", params, kwargs, " produced average toy ", toys.mean())
+
+
+        dist = hypney.models.from_samples(toys, **options)
         # Remove standard loc/scale/rate params
         # to avoid confusion with model parameters
         return dist.freeze()

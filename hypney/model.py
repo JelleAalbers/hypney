@@ -1,11 +1,9 @@
 from copy import copy
 import functools
-import math
 import typing as ty
 
 import eagerpy as ep
 import numpy as np
-from numpy.core.fromnumeric import prod
 
 import hypney
 from hypney import NotChanged
@@ -122,12 +120,14 @@ class Model:
         validate_defaults=True,
         **kwargs
     ):
-        if validate_defaults:
-            params = self.defaults
-        if params is NotChanged and not kwargs:
-            return
         if params is NotChanged:
             params = dict()
+        if params is None:
+            raise ValueError("None is not valid for params")
+        if validate_defaults and not params:
+            params = self.defaults
+        if not params and not kwargs:
+            return
         new_defaults = self.validate_params(params, **kwargs)
         self.param_specs = tuple(
             [p._replace(default=new_defaults[p.name]) for p in self.param_specs]
@@ -163,10 +163,12 @@ class Model:
             name is NotChanged
             and data is NotChanged
             and quantiles is NotChanged
-            and not params
+            and (params is NotChanged or not params)
             and not kwargs
         ):
             return self
+        if params is None:
+            raise ValueError("None is invalid as params...")
 
         new_self = copy(self)
         Model.__init__(
