@@ -80,11 +80,8 @@ def np64(x):
 
 @export
 def average_axis0(x, weights=None):
-    x = ep.astensor(x)
-    stacked = ep.stack(x, axis=0)
     weights = to_tensor(weights, match_type=x)
-    weights = weights.reshape(tuple([len(stacked)] + [1] * (len(stacked.shape) - 1)))
-    return ep.sum(stacked * weights, axis=0)
+    return ep.sum(x * weights, axis=0) / ep.sum(weights, axis=0)
 
 
 @export

@@ -18,7 +18,7 @@ When you create models, you can specify defaults for parameters:
 
 Any unspecified parameter to methods like ``pdf`` is replaced by a default. Parameters **always** have defaults, even if you don't specify any when making a model. For example, the defaults for ``loc`` and ``scale`` are 0 and 1. There are no 'mandatory parameters' to any model.
 
-Unlike ``scipy.stats``, passing defaults on initialization does not "freeze" parameters; see the ``fix`` method for that[LINK].
+Unlike ``scipy.stats``, passing defaults on initialization does not "freeze" parameters; see the ``fix`` and ``freeze`` methods for that[LINK].
 
 You can also specify defaults via the ``params`` argument:
 
@@ -115,15 +115,52 @@ You can simulate new data with the ``rvs`` method, which, like in ``scipy.stats`
 Models also have a ``mean`` and ``std`` method, which return the expected mean and standard deviation of an infinite dataset of observables. For complex models these may be very slow, or raise a NotImplementedError. For models with multiple observables their behaviour is currently undefined.
 
 
-Plotting
---------
-Hypney includes a small plotting helper to quickly inspect one-dimensional models. You can plot the PDF, CDF, and differential rate of a model:
+Vectorization
+-------------
+
+All model methods are vectorized over parameters:
+
+    >>> model = hp.norm()
+    >>> model.pdf(0, loc=[-1, 0, 1], scale=[1, 2, 3])
+    array([0.24197072, 0.19947114, 0.12579441])
+
+    >>> model.pdf([0, 1], loc=[-1, 0, 1], scale=[1, 2, 3])
+    array([[0.24197072, 0.05399097],
+           [0.19947114, 0.17603266],
+           [0.12579441, 0.13298076]])
+
+You can specify parameters as arbitrary-shaped arrays/lists/tensors.
+The normal `numpy broadcasting rules <https://numpy.org/doc/stable/user/basics.broadcasting.html>`_ apply.
 
 .. plot::
     :include-source: True
     :context: close-figs
 
     import hypney.all as hp
+    model = hp.mixture(
+        hp.norm().shift(-1),
+        hp.norm().shift(1),
+        share=['loc', 'scale'])
+
+    loc = np.linspace(-5, 5, 300)
+    scale = np.linspace(0.2, 2, 300)
+    p = model.pdf(0, loc=loc[:,None], scale=scale[None,:])
+
+    plt.pcolormesh(loc, scale, p.T, shading='nearest', cmap=plt.cm.magma)
+    plt.xlabel("loc")
+    plt.ylabel("scale")
+    plt.colorbar(label='PDF(0)')
+
+Hypney always 'batches' over the entire dataset. You cannot specify different parameters for use on different events in a dataset.
+
+Plotting
+--------
+Hypney includes a small plotting helper to quickly inspect one-dimensional models. You can plot the PDF, CDF, and differential rate of a model:
+
+
+.. plot::
+    :include-source: True
+    :context: close-figs
 
     m = hp.norm(rate=2) + hp.norm(loc=3)
     m.plot_pdf()
@@ -139,4 +176,3 @@ By default, hypney will guess upper and lower bounds to plot between. You can sp
     :context: close-figs
 
     m.plot_diff_rate(np.linspace(-4, 4, 10), marker='o', auto_labels=False)
-

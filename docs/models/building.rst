@@ -49,9 +49,10 @@ The new model takes the same parameters, which are simply passed on to the under
     m = hp.norm()
     m_cut = m.cut(-2, 2)
 
-    m.plot_pdf()
-    m_cut.plot_pdf()
-    m_cut(loc=1).plot_pdf()
+    m.plot_pdf(label='Standard')
+    m_cut.plot_pdf(label='Cut')
+    m_cut(loc=1).plot_pdf(label='Cut, loc=1')
+    plt.legend()
 
 This shows the PDFs of a standard normal (blue), a standard normal cut to [-2, 2] (orange), and a normal with a mode of 1 cut to [-2, 2]. Notice the cut for the last model is still [-2, 2]; ``loc`` specifies the mean of the uncut model, it does not shift the cut model. To do that, see shifts and scales [TODO xref] below.
 
@@ -80,10 +81,11 @@ The ``Model.shift`` and ``Model.scale`` method return models for data that has b
 
     import hypney.all as hp
     m_orig = hp.norm()
-    m_orig.plot_pdf()
-
     m_scaled = m_orig.scale(2)
-    m_scaled.plot_pdf()
+
+    m_orig.plot_pdf(label='Standard')
+    m_scaled.plot_pdf(label='Scaled by 2')
+    plt.legend()
 
 As with a cut model, the new model takes the same parameters, which are simply passed on to the underlying model. For example:
 
@@ -91,13 +93,12 @@ As with a cut model, the new model takes the same parameters, which are simply p
     :include-source: True
     :context: close-figs
 
-    m_orig(loc=3).plot_pdf()
-    m_scaled(loc=3).plot_pdf()
+    m_orig(loc=3).plot_pdf(label='Orig, loc=3')
+    m_scaled(loc=3).plot_pdf(label='Scaled by 2, loc=3')
+    plt.legend()
 
 
 Setting ``m_scaled``'s loc to 3 caused the model's mean to shift to 6, not 3; as promised, ``loc`` controls the mean of the model before the factor 2 scaling.
-
-(You can use ``Model.shift_and_scale`` for data that was first shifted, then scaled. This is very slightly more efficient than calling ``Model.shift(...).scale(...)``.)
 
 
 Sums / mixtures
@@ -127,7 +128,7 @@ You can also use ``Model.mix_with(*other_models)`` and ``hypney.models.mixture(*
     m_shared(scale=0.7).plot_pdf()
 
 
-By default, each model's parameter is given a new unique name. In case of name clashes, as in the example above, parameters are renamed `{model_name}_{param_name}`; if the models are not named, "m{I}" is used, where {I} is the index of the model in the mixture.
+Unshared parameters with clashing name are renamed to `{model_name}_{param_name}`. If the models have no name, "m{I}" is used, where {I} is the index of the model in the mixture.
 
     >>> m_sum.param_names
     ('m0_rate', 'm0_loc', 'm0_scale', 'm1_rate', 'm1_loc', 'm1_scale')

@@ -47,6 +47,13 @@ def test_mixture():
     assert "scale_2" not in m_shared.param_names
     assert m_shared(scale=2).pdf(2) == 0.5 * (m1 + m2 + m3).pdf(1)
 
+    # Test vectorization
+    m = hypney.models.mixture(
+        hypney.models.norm(), hypney.models.norm().shift(1), share="loc"
+    )
+    locs = np.linspace(0, 2, 10)
+    np.testing.assert_almost_equal(m.pdf(0, loc=locs), [m.pdf(0, loc=x) for x in locs])
+
 
 def test_tensor_product():
     m1 = hypney.models.uniform(rate=40)
