@@ -13,7 +13,12 @@ class MinimumAndValue(hypney.Estimator):
     sign = 1
 
     def _compute(self):
-        guess = np.array([hypney.utils.eagerpy.ensure_numpy_float(p.default) for p in self._free_params()])
+        guess = np.array(
+            [
+                hypney.utils.eagerpy.ensure_numpy_float(p.default)
+                for p in self._free_params()
+            ]
+        )
         bounds = [(p.min, p.max) for p in self._free_params()]
 
         if isinstance(self.stat.data, ep.NumPyTensor):

@@ -161,8 +161,14 @@ class Statistic:
         # Default assumption is that distribution is parameter-free
         return dict()
 
-    def dist_from_toys(self, params=NotChanged, n_toys=1000, transform=np.asarray,
-                       options=None, **kwargs):
+    def dist_from_toys(
+        self,
+        params=NotChanged,
+        n_toys=1000,
+        transform=np.asarray,
+        options=None,
+        **kwargs,
+    ):
         """Return an estimated distribution of the statistic given params
         from running simulations.
 

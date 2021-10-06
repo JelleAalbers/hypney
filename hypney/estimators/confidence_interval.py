@@ -55,9 +55,7 @@ class ConfidenceInterval(hypney.Estimator):
 
         # Evaluate statistic at anchors
         # (statistic is vectorized over params)
-        anchor_pars = {
-            self.poi: stat.model._to_tensor(self.anchors).raw
-        }
+        anchor_pars = {self.poi: stat.model._to_tensor(self.anchors).raw}
         self.stat_at_anchors = self.stat.compute(params=anchor_pars)
 
     def _compute_side(self, side=+1):

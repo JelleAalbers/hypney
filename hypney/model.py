@@ -116,10 +116,7 @@ class Model:
         pass
 
     def _set_defaults(
-        self,
-        params: dict = NotChanged,
-        validate_defaults=True,
-        **kwargs
+        self, params: dict = NotChanged, validate_defaults=True, **kwargs
     ):
         if params is NotChanged:
             params = dict()
@@ -173,10 +170,14 @@ class Model:
 
         new_self = copy(self)
         Model.__init__(
-            new_self, name=name, data=data, quantiles=quantiles,
+            new_self,
+            name=name,
+            data=data,
+            quantiles=quantiles,
             # Only re-validate the defaults if new defaults were actually given
             validate_defaults=(params != NotChanged and _merge_dicts(params, kwargs)),
-            params=params, **kwargs
+            params=params,
+            **kwargs,
         )
         return new_self
 
@@ -299,7 +300,9 @@ class Model:
                 # No params passed at all; we can just return defaults..
                 # .. if the params have been passed through validate once,
                 # to convert them into tensors.
-                if self.defaults and not isinstance(self.defaults[self.param_names[0]], ep.Tensor):
+                if self.defaults and not isinstance(
+                    self.defaults[self.param_names[0]], ep.Tensor
+                ):
                     raise ValueError("Defaults have not been validated!")
                 return self.defaults
             for p in self.param_specs:

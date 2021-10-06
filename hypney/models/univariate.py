@@ -100,7 +100,9 @@ class UnivariateDistribution(hypney.Model):
             raise NotImplementedError(
                 f"This version of scipy does not have {self.scipy_name}"
             )
-        return self._dists["scipy"].rvs(size=size, **self._dist_params(params))[..., None]
+        return self._dists["scipy"].rvs(size=size, **self._dist_params(params))[
+            ..., None
+        ]
 
     def _logpdf(self, params: dict) -> ep.TensorType:
         dist = self.dist_for_data()
