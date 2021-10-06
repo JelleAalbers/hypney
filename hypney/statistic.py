@@ -175,10 +175,7 @@ class Statistic:
 
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
         self = self.set(params=params, **kwargs)
-        print(self, params, kwargs, self.model.defaults)
         toys = self.rvs(n_toys, transform=transform)
-        print("dist_from_toys called with ", params, kwargs, " produced average toy ", toys.mean())
-
 
         dist = hypney.models.from_samples(toys, **options)
         # Remove standard loc/scale/rate params

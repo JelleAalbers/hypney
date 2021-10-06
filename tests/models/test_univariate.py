@@ -131,14 +131,11 @@ def test_vectorization():
         m.rate(rate=_r, loc=_l), [[m.rate(rate=x, loc=y) for y in locs] for x in rates]
     )
 
-    # TODO: two vectors with [None,:] and [:,None], auto-broadcasted up
-    # (None,: might be reversed).
-    # Failing due to dumb batch_shape detection in validate_params.
-    # Lots of edge cases, e.g. (10, 1,), (1, 1) and (10,)...
-    # _r, _l = np.array(rates)[:,None], np.array(locs)[None,:]
-    # np.testing.assert_equal(
-    #     m.rate(rate=_r, loc=_l),
-    #     [[m.rate(rate=x, loc=y) for y in locs] for x in rates])
+    # 'lazy matrix', two vectors with [:,None] and [None,:], auto-broadcasted up
+    _r, _l = np.array(rates)[:, None], np.array(locs)[None, :]
+    np.testing.assert_equal(
+        m.rate(rate=_r, loc=_l), [[m.rate(rate=x, loc=y) for y in locs] for x in rates]
+    )
 
     ##
     # Multiple datasets (nontrivial sample_shape)

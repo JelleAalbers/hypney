@@ -1,4 +1,5 @@
 from copy import copy
+import itertools
 import functools
 import typing as ty
 
@@ -312,9 +313,16 @@ class Model:
         # Convert all params to tensors
         params = {pname: self._to_tensor(x) for pname, x in params.items()}
 
-        # Make all params the same shape (batch_shape)
-        param_shapes = {pname: x.shape for pname, x in params.items()}
-        batch_shape = max(param_shapes.values(), key=lambda s: len(s), default=tuple())
+        # Find a common batch shape.
+        # Walk through shapes from right to left, taking max() of dimsizes,
+        # and taking 1 for missing entries.
+        param_shapes_rev = [tuple(reversed(x.shape)) for x in params.values()]
+        batch_shape = tuple(
+            reversed(
+                [max(x) for x in itertools.zip_longest(*param_shapes_rev, fillvalue=1)]
+            )
+        )
+        # Cast all param tensors to the common batch shape
         params = {
             k: hypney.utils.eagerpy.broadcast_to(v, batch_shape)
             for k, v in params.items()
@@ -530,12 +538,17 @@ class Model:
         # ... or a scalar, in case the method didn't use params at all
         # if so, broadcast result as a tensor
         batch_shape = self._batch_shape(params)
-        if not hasattr(result, 'shape') or not len(result.shape):
-            result = result * self._expand_params(dict(dummy=self.backend.ones(batch_shape)))['dummy']
+        if not hasattr(result, "shape") or not len(result.shape):
+            result = (
+                result
+                * self._expand_params(dict(dummy=self.backend.ones(batch_shape)))[
+                    "dummy"
+                ]
+            )
 
         # Remove ones(sample_shape) and eagerpy wrapper
         for _ in self.sample_shape:
-            result = result[...,0]
+            result = result[..., 0]
         result = hypney.utils.eagerpy.ensure_raw(result)
 
         if not batch_shape:
