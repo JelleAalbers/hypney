@@ -12,15 +12,21 @@ export, __all__ = hypney.exporter()
 
 
 @export
-def to_tensor(x: ty.Sequence, *, match_type: ep.TensorType):
+def to_tensor(x: ty.Sequence, tensorlib=None, match_type=None):
     if match_type is None:
-        match_type = ep.numpy.empty(0)
+        if tensorlib is None:
+            raise ValueError("pass tensorlib or match_type")
+        # Create a dummy tensor of the given tensorlib
+        if isinstance(tensorlib, str):
+            tensorlib = getattr(ep, tensorlib)
+        match_type = tensorlib.empty(0)
     if isinstance(x, type(match_type)):
         return x
     if not isinstance(match_type, ep.Tensor):
         match_type = ep.astensor(match_type)
     if isinstance(x, ep.Tensor):
-        raise ValueError("Passed tensor of incompatible type")
+        # Eagerpy tensor with different backend
+        x = x.numpy()
 
     # Check, why is this not included in eagerpy?
     # Maybe it is and I haven't found it?
@@ -96,6 +102,14 @@ def broadcast_to(x, shape):
 
 @export
 def tensorlib(x: ep.TensorType):
+    if isinstance(x, str):
+        return getattr(ep, x)
+    if isinstance(x, ep.modules.ModuleWrapper):
+        return x
+
+    if not isinstance(x, ep.Tensor):
+        x = ep.astensor(x)
+
     if isinstance(x, ep.NumPyTensor) or x is None:
         return ep.numpy
     elif isinstance(x, ep.PyTorchTensor):

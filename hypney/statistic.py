@@ -128,7 +128,9 @@ class Statistic:
     # Simulation
     ##
 
-    def rvs(self, size=1, params=None, transform=np.asarray, **kwargs) -> np.ndarray:
+    def rvs(
+        self, size=1, params=NotChanged, transform=np.asarray, **kwargs
+    ) -> np.ndarray:
         """Return statistic evaluated on simulated data,
         generated from model with params
 

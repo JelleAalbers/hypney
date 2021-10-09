@@ -8,6 +8,7 @@ import numpy as np
 
 import hypney
 from hypney import NotChanged
+import hypney.utils.eagerpy as ep_util
 
 export, __all__ = hypney.exporter()
 
@@ -19,6 +20,7 @@ class Model:
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     data: ep.Tensor = None
     quantiles: ep.Tensor = None
+    _backend_name = None
 
     _data_is_single_scalar = False
     _quantiles_is_single_scalar = False
@@ -42,15 +44,18 @@ class Model:
         return {p.name: p.default for p in self.param_specs}
 
     @property
-    def backend(self):
-        return hypney.utils.eagerpy.tensorlib(self.data)
-
-    @property
     def sample_shape(self):
         # Assumes event_shape is length-1
         if self.data is None:
             return (1,)
         return self.data.shape[:-1]
+
+    @property
+    def backend(self):
+        if not self._backend_name:
+            return None
+        # Can't sore backend module, that's not picklable
+        return getattr(ep, self._backend_name)
 
     ##
     # Initialization
@@ -64,8 +69,9 @@ class Model:
         params=NotChanged,  # Really defaults...
         param_specs=NotChanged,
         observables=NotChanged,
-        quantiles=None,
+        quantiles=NotChanged,
         validate_defaults=True,
+        backend=None,
         **kwargs,
     ):
         if name is not NotChanged:
@@ -77,8 +83,27 @@ class Model:
         if observables is not NotChanged:
             self.observables = observables
 
-        self._set_defaults(params, validate_defaults=validate_defaults, **kwargs)
+        if self._backend_name:
+            # backend is already fixed
+            if backend and backend != self._backend_name:
+                raise ValueError(
+                    f"backend is {self._backend_name}, cannot change to {backend}"
+                )
+        elif backend:
+            self._backend_name = backend
+        else:
+            # Infer backend from data / quantiles. If we can't, it's numpy.
+            for q in data, quantiles:
+                try:
+                    self._backend_name = ep_util.tensorlib(q).__name__
+                    break
+                except Exception:
+                    continue
+            else:
+                self._backend_name = "numpy"
+
         self._set_data(data)
+        self._set_defaults(params, validate_defaults=validate_defaults, **kwargs)
         self._set_quantiles(quantiles)
 
     def _set_data(self, data=hypney.NotChanged):
@@ -175,7 +200,7 @@ class Model:
             data=data,
             quantiles=quantiles,
             # Only re-validate the defaults if new defaults were actually given
-            validate_defaults=(params != NotChanged and _merge_dicts(params, kwargs)),
+            validate_defaults=params != NotChanged and _merge_dicts(params, kwargs),
             params=params,
             **kwargs,
         )
@@ -326,10 +351,7 @@ class Model:
             )
         )
         # Cast all param tensors to the common batch shape
-        params = {
-            k: hypney.utils.eagerpy.broadcast_to(v, batch_shape)
-            for k, v in params.items()
-        }
+        params = {k: ep_util.broadcast_to(v, batch_shape) for k, v in params.items()}
         return params
 
     def _batch_shape(self, params):
@@ -362,7 +384,12 @@ class Model:
             was_scalar = False
         if isinstance(x, (list, tuple)):
             x = self._to_tensor(x)
-        return ep.astensor(x), was_scalar
+        x = ep.astensor(x)
+        if ep_util.tensorlib(x) != self.backend:
+            raise ValueError(
+                f"Data and quantiles must be {self.backend.__name__} array/tensors"
+            )
+        return x, was_scalar
 
     def validate_data(self, data) -> ep.TensorType:
         """Return eagerpy tensor from data
@@ -378,7 +405,7 @@ class Model:
         return data
 
     def _to_tensor(self, x):
-        return hypney.utils.eagerpy.to_tensor(x, match_type=self.data)
+        return ep_util.to_tensor(x, tensorlib=self.backend or "numpy")
 
     def validate_quantiles(self, quantiles) -> ep.TensorType:
         """Return an (n_events) eagerpy tensor from quantiles
@@ -462,7 +489,7 @@ class Model:
             else:
                 result = result.item()
 
-        return hypney.utils.eagerpy.ensure_raw(result)
+        return ep_util.ensure_raw(result)
 
     # External functions: flexible input, returm value has same type as data.
 
@@ -552,7 +579,7 @@ class Model:
         # Remove ones(sample_shape) and eagerpy wrapper
         for _ in self.sample_shape:
             result = result[..., 0]
-        result = hypney.utils.eagerpy.ensure_raw(result)
+        result = ep_util.ensure_raw(result)
 
         if not batch_shape:
             # Un-tensorify
@@ -664,18 +691,19 @@ class WrappedModel(Model):
 
     _orig_model: Model
 
-    def __init__(self, orig_model=hypney.NotChanged, *args, **kwargs):
+    def __init__(self, orig_model: Model = hypney.NotChanged, *args, **kwargs):
         if orig_model is not hypney.NotChanged:
             # No need to make a copy now; any attempted state change
             # (set data, change defaults...) will trigger that
             self._orig_model = orig_model
-        kwargs.setdefault("observables", self._orig_model.observables)
-        kwargs.setdefault("param_specs", self._orig_model.param_specs)
+        kwargs.setdefault("observables", orig_model.observables)
+        kwargs.setdefault("param_specs", orig_model.param_specs)
         # TODO: this causes _orig_model._init_data to often be run twice...
         # But without it self.data could be None while self._orig_model.data
         # would be set
-        kwargs.setdefault("data", self._orig_model.data)
-        kwargs.setdefault("quantiles", self._orig_model.quantiles)
+        kwargs.setdefault("data", orig_model.data)
+        kwargs.setdefault("quantiles", orig_model.quantiles)
+        kwargs.setdefault("backend", orig_model._backend_name)
         super().__init__(*args, **kwargs)
 
 
