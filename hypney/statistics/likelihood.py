@@ -10,19 +10,9 @@ class LogLikelihood(hypney.Statistic):
     def _compute(self, params):
         result = (
             -self.model._rate(params)
-            +
-            # _log_diff_rate(params=params).sum() seems less stable...
-            # Maybe this depends on whether pdf or diff_rate is fundamental for
-            # a model?
-            self.data.shape[-2] * self.model._log_rate(params)
             # keepdims=True since params has trailing (1,)... :-(
-            + self.model._logpdf(params=params).sum(axis=-1, keepdims=True)
+            + self.model._log_diff_rate(params=params).sum(axis=-1, keepdims=True)
         )
-        # Somehow the scipy optimizer is fine with -inf,
-        # but not with accurate but insanely large values??
-        # TODO: madness. Investigate.
-        if isinstance(self.data, ep.NumPyTensor):
-            return ep.where(result < -1e5, result * float("inf"), result)
         return result
 
 
@@ -73,6 +63,7 @@ class PLR(LikelihoodRatio):
         return hypney.models.chi2(df=len(self.poi)).freeze()
 
 
+@export
 class PLROrZero(PLR):
     def __init__(self, *args, zero_if="high", **kwargs):
         super().__init__(*args, **kwargs)
