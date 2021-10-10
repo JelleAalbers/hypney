@@ -40,20 +40,21 @@ def test_lr():
     lr = hypney.statistics.LikelihoodRatio(m, data=data)
 
     # Best fit should be a very sharp Gaussian with rate = 1
-    min_scale = m.param_spec_for("scale").min
     assert np.isclose(lr.bestfit["rate"], 1)
-    assert np.isclose(lr.bestfit["scale"], min_scale)
     assert np.isclose(lr.bestfit["loc"], 0)
+    assert np.isclose(lr.bestfit["scale"], 0)
+    assert lr.bestfit["scale"] > 0
 
+    very_low_scale = lr.bestfit["scale"]
     double_rate = lr.compute(params={**lr.bestfit, **dict(rate=2)})
     assert np.isclose(
         double_rate,
         -2
         * (
             # LL of hypothesis ...
-            (-2 + np.log(2 * stats.norm(0, min_scale).pdf(0)))
+            (-2 + np.log(2 * stats.norm(0, very_low_scale).pdf(0)))
             # ... minus LL of bestfit
-            - (-1 + stats.norm(0, min_scale).logpdf(0))
+            - (-1 + stats.norm(0, very_low_scale).logpdf(0))
         ),
     )
 

@@ -38,8 +38,9 @@ class Estimator(metaclass=FunctionLike):
         return [p for p in self.stat.model.param_specs if p.name not in self.fix]
 
     def _param_sequence_to_dict(self, x):
+        # TODO: this doesn't work for batched params!
         params = {
-            p.name: hypney.utils.eagerpy.ensure_raw(x[..., i])
+            p.name: hypney.utils.eagerpy.ensure_raw(x[i])
             for i, p in enumerate(self._free_params())
         }
         return {**params, **self.fix}
