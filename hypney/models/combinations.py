@@ -272,7 +272,7 @@ def combine_param_specs(
                 new_name = name + "_" + p.name
                 pmap[name].append((p.name, new_name))
                 specs.append(
-                    hypney.ParameterSpec(
+                    hypney.Parameter(
                         name=new_name, min=p.min, max=p.max, default=p.default
                     )
                 )

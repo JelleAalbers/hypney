@@ -16,7 +16,7 @@ export, __all__ = hypney.exporter()
 @export
 class Model:
     name: str = ""
-    param_specs: ty.Tuple[hypney.ParameterSpec] = (hypney.DEFAULT_RATE_PARAM,)
+    param_specs: ty.Tuple[hypney.Parameter] = (hypney.DEFAULT_RATE_PARAM,)
     observables: ty.Tuple[hypney.Observable] = (hypney.DEFAULT_OBSERVABLE,)
     data: ep.Tensor = None
     quantiles: ep.Tensor = None

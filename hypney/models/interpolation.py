@@ -40,7 +40,7 @@ class Interpolation(hypney.Model):
             # only anchors given.
             param_specs = tuple(
                 [
-                    hypney.ParameterSpec(
+                    hypney.Parameter(
                         name=pname,
                         # Use (left) middle anchor as the default
                         default=anchors[(len(anchors) - 1) // 2],

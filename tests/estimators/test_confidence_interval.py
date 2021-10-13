@@ -3,7 +3,7 @@ import pytest
 from scipy import stats
 
 import hypney
-from hypney.basics import ParameterSpec
+from hypney.basics import Parameter
 
 
 def poisson_ul(n, mu_bg=0, cl=0.9):
@@ -64,9 +64,7 @@ def test_poisson_upper_limit():
     # Data is still empty, so UL = bestfit = highest possible value = 0
     mneg = m.reparametrize(
         lambda params: dict(rate=-params["neg_rate"]),
-        param_specs=(
-            ParameterSpec(name="neg_rate", default=0, min=-float("inf"), max=0),
-        ),
+        param_specs=(Parameter(name="neg_rate", default=0, min=-float("inf"), max=0),),
     )
     stat3 = hypney.statistics.Count(mneg)
     ul = hypney.estimators.UpperLimit(
@@ -93,9 +91,7 @@ def test_poisson_lower_limit():
     # Test case where statistic decreases as parameter increases
     mneg = m.reparametrize(
         lambda params: dict(rate=-params["neg_rate"]),
-        param_specs=(
-            ParameterSpec(name="neg_rate", default=0, min=-float("inf"), max=0),
-        ),
+        param_specs=(Parameter(name="neg_rate", default=0, min=-float("inf"), max=0),),
     )
     stat3 = hypney.statistics.Count(mneg)
     ll = hypney.estimators.LowerLimit(

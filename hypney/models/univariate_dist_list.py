@@ -8,7 +8,7 @@ export, __all__ = hypney.exporter()
 def shape_params(*names):
     return tuple(
         [
-            hypney.ParameterSpec(name=name, default=0, min=0, max=float("inf"))
+            hypney.Parameter(name=name, default=0, min=0, max=float("inf"))
             for name in names
         ]
     )

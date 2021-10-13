@@ -26,7 +26,7 @@ class NotChanged:
 
 
 @export
-class ParameterSpec(ty.NamedTuple):
+class Parameter(ty.NamedTuple):
     """Description of a parameter: name, default, and limits"""
 
     name: str
@@ -37,9 +37,9 @@ class ParameterSpec(ty.NamedTuple):
     anchors: tuple = tuple()  # Values at which model is most accurate
 
 
-DEFAULT_RATE_PARAM = ParameterSpec(name="rate", min=0, max=float("inf"), default=1.0)
-DEFAULT_LOC_PARAM = ParameterSpec(name="loc", min=-float("inf"))
-DEFAULT_SCALE_PARAM = ParameterSpec(name="scale", min=0, max=float("inf"), default=1.0)
+DEFAULT_RATE_PARAM = Parameter(name="rate", min=0, max=float("inf"), default=1.0)
+DEFAULT_LOC_PARAM = Parameter(name="loc", min=-float("inf"))
+DEFAULT_SCALE_PARAM = Parameter(name="scale", min=0, max=float("inf"), default=1.0)
 
 RATE_LOC_PARAMS = (DEFAULT_RATE_PARAM, DEFAULT_LOC_PARAM)
 RATE_LOC_SCALE_PARAMS = RATE_LOC_PARAMS + (DEFAULT_SCALE_PARAM,)
