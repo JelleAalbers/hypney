@@ -19,10 +19,7 @@ setuptools.setup(
     install_requires=requires,
     tests_require=["pytest"],
     extras_require={
-        'docs': ['sphinx',
-                 'sphinx_rtd_theme',
-                 'matplotlib',
-                 'recommonmark']
+        "docs": ["sphinx", "sphinx_rtd_theme", "matplotlib", "numpydoc", "recommonmark"]
     },
     long_description=readme + "\n\n" + history,
     long_description_content_type="text/markdown",
