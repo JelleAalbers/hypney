@@ -13,6 +13,12 @@ export, __all__ = hypney.exporter()
 
 @export
 def to_tensor(x: ty.Sequence, tensorlib=None, match_type=None):
+    """Convert x to an eagerpy tensor specified by tensorlib or match_type.
+
+    Args:
+     - tensorlib: name of module or ep.module to use
+     - match_type: other tensor whose type to match.
+    """
     if match_type is None:
         if tensorlib is None:
             raise ValueError("pass tensorlib or match_type")
@@ -46,6 +52,7 @@ def to_tensor(x: ty.Sequence, tensorlib=None, match_type=None):
 
 @export
 def ensure_raw(x):
+    """Return raw tensor from x, unless it already is a raw tensor"""
     try:
         return x.raw
     except AttributeError:
@@ -54,6 +61,7 @@ def ensure_raw(x):
 
 @export
 def ensure_numpy(x):
+    """Return numpy array from x, unless it already is a numpy array"""
     try:
         return x.numpy()
     except AttributeError:
@@ -62,6 +70,7 @@ def ensure_numpy(x):
 
 @export
 def ensure_numpy_float(x):
+    """Return a simple float from a 0-dimensional array, tensor, or float"""
     if isinstance(x, ep.Tensor):
         x = x.numpy()
     if isinstance(x, np.ndarray):
@@ -85,7 +94,7 @@ def np64(x):
 
 
 @export
-def average_axis0(x, weights=None):
+def average_axis0(x, weights):
     weights = to_tensor(weights, match_type=x)
     return ep.sum(x * weights, axis=0) / ep.sum(weights, axis=0)
 

@@ -287,7 +287,7 @@ class Model:
             keep = (keep,)
         return self.fix([pname for pname in self.param_names if pname not in keep])
 
-    def freeze(self, keep=tuple()):
+    def freeze(self):
         """Return new model that takes no parameters.
         All parameters are fixed to their defaults
         """
@@ -321,7 +321,7 @@ class Model:
                 if self.defaults and not isinstance(
                     self.defaults[self.param_names[0]], ep.Tensor
                 ):
-                    raise ValueError("Defaults have not been validated!")
+                    raise RuntimeError("Defaults have not been validated!")
                 return self.defaults
             for p in self.param_specs:
                 params.setdefault(p.name, p.default)
@@ -453,7 +453,7 @@ class Model:
 
     def _tensor_method(
         self,
-        # Have to pass the method *name*, since self will change
+        # Have to pass the method *name*, since self may change
         name,
         params,
         _input_name="data",
@@ -571,6 +571,7 @@ class Model:
 
         if not batch_shape:
             # Un-tensorify
+            # TODO: Will autograd forgive us this?
             return result.item()
         return result
 
