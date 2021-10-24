@@ -44,13 +44,6 @@ class Model:
         return {p.name: p.default for p in self.param_specs}
 
     @property
-    def sample_shape(self):
-        # Assumes event_shape is length-1
-        if self.data is None:
-            return (1,)
-        return self.data.shape[:-1]
-
-    @property
     def backend(self):
         if not self._backend_name:
             return None
@@ -361,14 +354,10 @@ class Model:
             return params[self.param_names[0]].shape
 
     def _expand_params(self, params):
-        """"Return params expanded to (batch_shape, [1] * len(sample_shape))
+        """"Return params expanded to (batch_shape, 1)
         """
-        # Add len(sample_shape) 1s
-        # to param shape for broadcasting with data.
-        for _ in self.sample_shape:
-            params = {pname: x[..., None] for pname, x in params.items()}
-
-        return params
+        # Add 1 to param shape for broadcasting with data.
+        return {pname: x[..., None] for pname, x in params.items()}
 
     def _validate_data_or_quantiles(self, x):
         if x is None:
@@ -479,12 +468,12 @@ class Model:
 
         expanded_params = self._expand_params(params)
 
-        # returns (batch_shape, sample_shape)
+        # returns (batch_shape, 1)
         result = getattr(self, "_" + name)(expanded_params)
 
         if getattr(self, f"_{_input_name}_is_single_scalar"):
             if self._batch_shape(params):
-                # Remove sample_shape = 1 from end
+                # Remove (1) from end
                 result = result[..., 0]
             else:
                 result = result.item()
@@ -562,7 +551,7 @@ class Model:
         # / be used together with tensor methods that do.
         expanded_params = self._expand_params(params)
 
-        # should return (batch_shape, ones(sample_shape))...
+        # should return (batch_shape, 1)
         result = method(expanded_params)
 
         # ... or a scalar, in case the method didn't use params at all
@@ -576,9 +565,8 @@ class Model:
                 ]
             )
 
-        # Remove ones(sample_shape) and eagerpy wrapper
-        for _ in self.sample_shape:
-            result = result[..., 0]
+        # Remove 1 from shape, remove eagerpy wrapper
+        result = result[..., 0]
         result = ep_util.ensure_raw(result)
 
         if not batch_shape:
