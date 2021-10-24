@@ -3,6 +3,9 @@ Hypney
 
 Hypney (probably not its final name) is an embryonic statistical inference package.
 
+[![Build Status](https://github.com/JelleAalbers/hypney/actions/workflows/pytest.yml/badge.svg)
+[![Documentation Status](https://readthedocs.org/projects/hypney/badge/?version=latest)](https://hypney.readthedocs.io/en/latest/?badge=latest)
+
 Synopsis
 --------
 
