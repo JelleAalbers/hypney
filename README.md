@@ -24,7 +24,7 @@ This defines a model made from two Gaussians (the second with a fixed event rate
 Features
 --------
   * Build models in multiple dimensions, with shared or independent parameters, using analytic distributions or histograms as building blocks.
-  * Support for [numpy](https://numpy.org/), [pytorch](https://pytorch.org/), [tensorflow](https://www.tensorflow.org/), and [JAX](https://github.com/google/jax). Just provide your data as a tensor or array, and hypney will use the corresponding library under the hood, including autodifferentiation to speed up optimizations. (Thanks to [eagerpy](https://github.com/jonasrauber/eagerpy)!)
+  * Support for [numpy](https://numpy.org/), [pytorch](https://pytorch.org/) and [tensorflow](https://www.tensorflow.org/). Hypney will use the library corresponding to your data, including autodifferentiation to speed up optimizations. (Thanks to [eagerpy](https://github.com/jonasrauber/eagerpy)!)
   * Depends only on numpy, scipy, and pure-python packages.
   * Models/statistics are immutable and pickle-able, enabling serialization, multithreading and multiprocessing.
   * Exact / non-asymptotic frequentist inference, such as confidence intervals from [Neyman constructions](https://en.wikipedia.org/wiki/Neyman_construction).

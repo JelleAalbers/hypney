@@ -66,7 +66,7 @@ class TransformedDataModel(hypney.WrappedModel):
         # Careful with log, the jac_det may be a scalar and confuse eagerpy
         return (
             self._orig_model._logpdf(params)
-            + hypney.utils.eagerpy.to_tensor(
+            + hypney.utils.eagerpy.astensor(
                 self._transform_jac_det(), match_type=self.data
             ).log()
         )

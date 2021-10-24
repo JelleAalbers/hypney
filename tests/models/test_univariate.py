@@ -6,10 +6,11 @@ import pytest
 from scipy import stats
 
 import hypney
+import hypney.utils.eagerpy as ep_util
 
 
-def test_uniform():
-    m = hypney.models.uniform()
+def test_uniform(tensorlib):
+    m = hypney.models.uniform(backend=tensorlib)
     assert m.rate() == hypney.DEFAULT_RATE_PARAM.default
     assert m.rate(params=dict(rate=100.0)) == 100.0
 
@@ -19,14 +20,19 @@ def test_uniform():
     assert m.simulate().shape[0] > 0
 
     # Test simulate
-    m = hypney.models.uniform(rate=0)
+    m = hypney.models.uniform(rate=0, backend=tensorlib)
     data = m.simulate()
     assert data.shape == (0, 1)
     data = m.rvs(size=5)
     assert data.shape == (5, 1)
 
     # Test different data formats and pdf
-    assert m.pdf(0) == m.pdf([0]) == m.pdf(np.array([0])) == m.pdf(np.array([[0]]))
+    assert (
+        m.pdf(0)
+        == m.pdf([0])
+        == m.pdf(tensorlib.zeros(1))
+        == m.pdf(tensorlib.zeros((1, 1)))
+    )
     assert m.pdf(0) == 1.0
 
     # Ensure we don't get back whacky types (0-element arrays, ep-wrapped scalars)
@@ -35,18 +41,22 @@ def test_uniform():
     assert m.logpdf(0) == stats.uniform().logpdf(0)
 
     # Test cdf and ppf
-    np.testing.assert_array_equal(m.cdf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
-    np.testing.assert_array_equal(m.ppf([0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0]))
+    np.testing.assert_array_equal(
+        m.cdf([0.0, 0.5, 1.0]), ep_util.astensor([0.0, 0.5, 1.0], tensorlib=tensorlib)
+    )
+    np.testing.assert_array_equal(
+        m.ppf([0.0, 0.5, 1.0]), ep_util.astensor([0.0, 0.5, 1.0], tensorlib=tensorlib)
+    )
 
     # Test diff rate
-    m = hypney.models.uniform(rate=2)
-    assert m.diff_rate(0.0) == 2.0
-    assert m.log_diff_rate(0.0) == np.log(2.0)
+    m = hypney.models.uniform(rate=2, backend=tensorlib)
+    np.testing.assert_almost_equal(m.diff_rate(0.0), 2.0)
+    np.testing.assert_almost_equal(m.log_diff_rate(0.0), np.log(2.0))
 
     # Test mean and std
     assert m.mean() == 0.5
     assert m.mean(loc=1, scale=2) == 2
-    assert m.std() == stats.uniform().std()
+    np.testing.assert_almost_equal(m.std(), stats.uniform().std())
 
     # Test making models with new defaults
     m2 = m(rate=50)
@@ -54,7 +64,7 @@ def test_uniform():
     assert m2.rate() == 50.0
 
     # Test freezing data
-    m = hypney.models.uniform(rate=100)
+    m = hypney.models.uniform(rate=100, backend=tensorlib)
     with pytest.raises(Exception):
         m.pdf()
     m2 = m(data=0)
@@ -63,7 +73,7 @@ def test_uniform():
     assert m2(data=1) not in (m, m2)
 
     # Models can be pickled and unpickled
-    m = hypney.models.uniform(loc=0.5)
+    m = hypney.models.uniform(loc=0.5, backend=tensorlib)
     with tempfile.NamedTemporaryFile() as tempf:
         fn = tempf.name
         with open(fn, mode="wb") as f:

@@ -50,9 +50,7 @@ class UnivariateDistribution(hypney.Model):
             return self._dists[modname]
 
         if modname == "jax":
-            if not hasattr(ep.jax.scipy.stats, self.scipy_name):
-                raise NotImplementedError(f"{self.distname} not implemented in JAX")
-            result = getattr(ep.jax.scipy.stats, self.distname)
+            raise NotImplementedError(f"JAX wrappers not yet implemented")
 
         elif modname == "torch":
             import torch  # noqa
@@ -162,23 +160,17 @@ class TorchDistributionWrapper:
     def _patch_params(self, params, data_tensor):
         params = self.transform(params)
 
-        # Model ensured params were all tensors of the same shape
-        if not params:
-            param_shape = tuple()
-        else:
-            param_shape = params[list(params.keys())[0]].shape
-
         if self.patch_loc:
             x0 = params["loc"]
             params = {k: v for k, v in params.items() if k != "loc"}
         else:
-            x0 = 0
+            x0 = 0.0
 
         if self.patch_scale:
             x_scale = params["scale"]
             params = {k: v for k, v in params.items() if k != "scale"}
         else:
-            x_scale = 1
+            x_scale = 1.0
 
         params = self._patch_param_dtypes(params, data_tensor)
         return params, x0, x_scale
@@ -203,7 +195,7 @@ class TorchDistributionWrapper:
         return self.dist(**params).log_prob((data - x0) / x_scale).exp() / x_scale
 
     def cdf(self, data, **params):
-        params, x0, x_scale = self._patch_params(params)
+        params, x0, x_scale = self._patch_params(params, data)
         return self.dist(**params).cdf((data - x0) / x_scale)
 
     # TODO: test these!
@@ -237,7 +229,9 @@ class TFPDistributionWrapper(TorchDistributionWrapper):
         import tensorflow as tf
 
         params, x0, x_scale = self._patch_params(params, data)
-        return self.dist(**params).log_prob((data - x0) / x_scale) - tf.log(x_scale)
+        return self.dist(**params).log_prob((data - x0) / x_scale) - tf.math.log(
+            x_scale
+        )
 
     def pdf(self, data, **params):
         params, x0, x_scale = self._patch_params(params, data)

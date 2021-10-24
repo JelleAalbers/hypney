@@ -12,7 +12,7 @@ export, __all__ = hypney.exporter()
 
 
 @export
-def to_tensor(x: ty.Sequence, tensorlib=None, match_type=None):
+def astensor(x: ty.Sequence, tensorlib=None, match_type=None):
     """Convert x to an eagerpy tensor specified by tensorlib or match_type.
 
     Args:
@@ -25,7 +25,7 @@ def to_tensor(x: ty.Sequence, tensorlib=None, match_type=None):
         # Create a dummy tensor of the given tensorlib
         if isinstance(tensorlib, str):
             tensorlib = getattr(ep, tensorlib)
-        match_type = tensorlib.empty(0)
+        match_type = tensorlib.zeros(0)
     if isinstance(x, type(match_type)):
         return x
     if not isinstance(match_type, ep.Tensor):
@@ -69,7 +69,7 @@ def ensure_numpy(x):
 
 
 @export
-def ensure_numpy_float(x):
+def ensure_float(x):
     """Return a simple float from a 0-dimensional array, tensor, or float"""
     if isinstance(x, ep.Tensor):
         x = x.numpy()
@@ -95,7 +95,7 @@ def np64(x):
 
 @export
 def average_axis0(x, weights):
-    weights = to_tensor(weights, match_type=x)
+    weights = astensor(weights, match_type=x)
     return ep.sum(x * weights, axis=0) / ep.sum(weights, axis=0)
 
 
@@ -126,7 +126,7 @@ def tensorlib(x: ep.TensorType):
     elif isinstance(x, ep.TensorFlowTensor):
         return ep.tensorflow
     elif isinstance(x, ep.JAXTensor):
-        return ep.jax
+        return ep.jax.numpy
     raise ValueError(f"Unknown tensor type {type(x)}")
 
 

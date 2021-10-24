@@ -64,10 +64,7 @@ class Minimum(hypney.Estimator):
     def _minimize(self, method, on_failure):
         self.history = []
         guess = np.array(
-            [
-                hypney.utils.eagerpy.ensure_numpy_float(p.default)
-                for p in self._free_params()
-            ]
+            [hypney.utils.eagerpy.ensure_float(p.default) for p in self._free_params()]
         )
         bounds = [(p.min, p.max) for p in self._free_params()]
 

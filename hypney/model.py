@@ -45,9 +45,13 @@ class Model:
 
     @property
     def backend(self):
+        """Return tensor backend module (ep.xxx)"""
+        # Can't sore backend module directly in an attribute,
+        # since it is not pickleable.
         if not self._backend_name:
             return None
-        # Can't sore backend module, that's not picklable
+        if self._backend_name == "jax.numpy":
+            return ep.jax.numpy
         return getattr(ep, self._backend_name)
 
     ##
@@ -82,8 +86,10 @@ class Model:
                 raise ValueError(
                     f"backend is {self._backend_name}, cannot change to {backend}"
                 )
-        elif backend:
+        elif isinstance(backend, str):
             self._backend_name = backend
+        elif hasattr(backend, "__name__"):
+            self._backend_name = backend.__name__
         else:
             # Infer backend from data / quantiles. If we can't, it's numpy.
             for q in data, quantiles:
@@ -374,7 +380,7 @@ class Model:
         if isinstance(x, (list, tuple)):
             x = self._to_tensor(x)
         x = ep.astensor(x)
-        if ep_util.tensorlib(x) != self.backend:
+        if ep_util.tensorlib(x).__name__ != self.backend.__name__:
             raise ValueError(
                 f"Data and quantiles must be {self.backend.__name__} array/tensors"
             )
@@ -394,7 +400,7 @@ class Model:
         return data
 
     def _to_tensor(self, x):
-        return ep_util.to_tensor(x, tensorlib=self.backend or "numpy")
+        return ep_util.astensor(x, tensorlib=self.backend or "numpy")
 
     def validate_quantiles(self, quantiles) -> ep.TensorType:
         """Return an (n_events) eagerpy tensor from quantiles
@@ -572,7 +578,7 @@ class Model:
         if not batch_shape:
             # Un-tensorify
             # TODO: Will autograd forgive us this?
-            return result.item()
+            return ep_util.ensure_float(result)
         return result
 
     # External functions: validate params if needed

@@ -137,7 +137,7 @@ class InterpolatorBuilder:
 
         return RegularGridInterpolator(
             [
-                hypney.utils.eagerpy.to_tensor(x, match_type=tensorlib.zeros(1))
+                hypney.utils.eagerpy.astensor(x, match_type=tensorlib.zeros(1))
                 for x in self.anchor_tuples
             ],
             results,
