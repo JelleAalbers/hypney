@@ -62,7 +62,7 @@ class Interpolation(hypney.Model):
 
                 progress_iter = tqdm
             except ImportError:
-                progress_iter = False
+                progress_iter = lambda x: x
         elif progress:
             # user may have passed a custom tqdm, e.g. tqdm.notebook
             progress_iter = partial(progress, desc="Building models")
