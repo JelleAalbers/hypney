@@ -10,6 +10,7 @@ def test_cut():
     assert m_cut.cut == ((0, float("inf")),)
     assert m_cut.cut_efficiency() == 0.5
     assert m_cut.cut_efficiency(loc=1) == stats.norm(loc=1).sf(0)
+    assert m_cut.rvs(100).min() >= 0
 
     m_half = hypney.models.halfnorm()
     x = np.linspace(-5, 5, 100)
