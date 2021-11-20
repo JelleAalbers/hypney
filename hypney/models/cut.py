@@ -27,6 +27,8 @@ class CutModel(hypney.WrappedModel):
         None can be put in place for +-inf
     """
 
+    # TODO: add docs warning about not autocutting data
+
     cut = NoCut
     _passes_cut: ep.Tensor
 
@@ -102,15 +104,24 @@ class CutModel(hypney.WrappedModel):
         yield from itertools.product(*[[-1, 1]] * self.n_dim)
 
     def _corner_points(self):
+        """Return (n_corners, n_dim) nested list of corner points"""
         return [
             [c[int(0.5 * _sign + 0.5)] for (c, _sign) in zip(self.cut, _signs)]
             for _signs in self._signs()
         ]
 
     def _corners_cdf(self, params: dict):
-        return ep.astensor(
+        """Return CDF at the self._corner_points()"""
+        # Attention: calling high-level CDF.
+        # This may or will expand our params again..
+        result = ep.astensor(
             self._orig_model.cdf(data=self._corner_points(), params=params)
         )
+        # TODO: why does the expansion only trigger sometimes?
+        # Fortunately there are always >= 2 corners...
+        if result.shape[0] == 1:
+            return result[0]
+        return result
 
     def _cut_efficiency(self, params: dict, corners_cdf=None):
         if self.cut is NoCut:
@@ -184,11 +195,13 @@ class CutModel(hypney.WrappedModel):
     def _cdf(self, params: dict):
         if self.n_dim > 1:
             raise NotImplementedError("nD cut CDF still todo...")
-        c_low, c_high = self._corners_cdf(params)[0]
+        c_low, c_high = self._corners_cdf(params)
         return ((self._orig_model._cdf(params) - c_low) / (c_high - c_low)).clip(0, 1)
 
     def _ppf(self, params: dict):
-        c_low, c_high = self._corners_cdf(params)[0]
+        if self.n_dim > 1:
+            raise NotImplementedError("nD cut PPF still todo...")
+        c_low, c_high = self._corners_cdf(params)
 
         # self.quantiles == (orig_quantiles - c_low).clip(0, None) / (c_high - c_low)
         # Cut always shrinks region and 0 <= quantiles <= 1, so clip never binds

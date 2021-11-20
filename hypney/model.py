@@ -222,11 +222,15 @@ class Model:
             self, transform_params=transform_params, *args, **kwargs
         )
 
-    def cut(self, *args, **kwargs):
+    def cut(self, *args, cut_data=False, **kwargs):
         """Return new model with observables cut to a rectangular region
 
         Args: left-right boundaries, specified in one of many legal ways.
         Just try some :-)
+
+        Args:
+            - cut_data: if True, applies cut to data associated with model
+                before associating it with the new cut model.
         """
         if args and kwargs:
             raise ValueError("Specify either keyword or position arguments")
@@ -237,7 +241,12 @@ class Model:
                 cut = args
         if kwargs:
             cut = kwargs
-        return hypney.models.CutModel(self, cut)
+
+        cut_model = hypney.models.CutModel(self, cut)
+
+        if cut_data and self.data is not None:
+            return cut_model(data=cut_model.apply_cut(cut_model.data))
+        return cut_model
 
     def shift_and_scale(self, shift=0.0, scale=1):
         """Return model for data that has been shifted, then scaled,
@@ -604,13 +613,13 @@ class Model:
         return self._rate(params).log()
 
     def _mean(self, params: dict):
-        return NotImplementedError
+        raise NotImplementedError
 
     def _var(self, params: dict):
         return self._std(params) ** 2
 
     def _std(self, params: dict):
-        return NotImplementedError
+        raise NotImplementedError
 
     ##
     # Plotting
