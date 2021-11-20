@@ -41,11 +41,18 @@ class LikelihoodRatio(hypney.Statistic):
 class PLR(LikelihoodRatio):
     # Dangerous! Goes down then up with rate poi, not nice / rectified / whatever
 
-    def __init__(self, *args, poi=tuple(), **kwargs):
+    def __init__(self, *args, poi='rate', **kwargs):
         if isinstance(poi, str):
             poi = (poi,)
         self.poi = tuple(poi)
         super().__init__(*args, **kwargs)
+
+    @property
+    def only_poi(self):
+        """Returns single parameter of interest,
+        crashes if there is more than one"""
+        assert len(self.poi) == 1
+        return self.poi[0]
 
     def _filter_poi(self, params: dict):
         """Return only parameters of interest from params"""
@@ -65,15 +72,15 @@ class PLR(LikelihoodRatio):
 
 @export
 class PLROrZero(PLR):
+
     def __init__(self, *args, zero_if="high", **kwargs):
         super().__init__(*args, **kwargs)
         assert zero_if in ("high", "low")
         self.zero_if = zero_if
-        assert len(self.poi) == 1
 
     def _compute(self, params):
         result = super()._compute(params)
-        saw_high = params[self.poi] > self.bestfit[self.poi]
+        saw_high = params[self.only_poi] > self.bestfit[self.only_poi]
         if saw_high == (self.zero_if == "high"):
             return 0
         return result
@@ -88,11 +95,10 @@ class PLROrZero(PLR):
 class SignedPLR(PLR):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert len(self.poi) == 1
 
     def _compute(self, params):
         result = super()._compute(params)
-        if params[self.poi] > self.bestfit[self.poi]:
+        if params[self.only_poi] > self.bestfit[self.only_poi]:
             # High / Excess hypothesis (if poi ~ rate)
             return result
         else:
