@@ -48,6 +48,18 @@ class Minimum(hypney.Estimator):
         self.autograd = autograd
 
     def _compute(self):
+        if not self._free_params():
+            # Nothing to optimize, just return result
+            possible_returns = dict(
+                point=[],
+                value=self.stat.compute(params=self.fix),
+                optresult=None,
+                history=[],
+            )
+            return [possible_returns[x] for x in self.return_kind]
+
+        # TODO: is self.fix properly added??
+
         # Try different methods; complaining only if last one fails.
         for i, method in enumerate(self.methods):
             final_method = i == len(self.methods) - 1
@@ -79,6 +91,7 @@ class Minimum(hypney.Estimator):
             if autograd
             else lambda x, autograd: self.objective(x, autograd)[0]
         )
+
         result = optimize.minimize(
             fun=fun,
             jac=True if autograd else None,
