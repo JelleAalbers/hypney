@@ -40,10 +40,14 @@ def test_mixture():
         np.testing.assert_allclose(mix.mean(), data.mean(), rtol=0.05)
         np.testing.assert_allclose(mix.std(), data.std(), rtol=0.05)
 
-    # Test renaming on parameter clash
+    # Test parameter after renaming
+    mix = m1 + m2_free
+    assert mix.rate(params=dict(m0_rate=1)) == 21.0
+
+    mix = m1 + m2_frozen
+    assert mix.rate(params=dict(rate=1)) == 21.0
+
     m2 = m2_free
-    mix = m1 + m2
-    assert mix.rate(params=dict(m0_rate=0)) == 20.0
 
     # Test parameter sharing
     m_shared = hypney.models.mixture(m1, m2, m3, share="scale")

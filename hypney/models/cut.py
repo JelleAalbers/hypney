@@ -87,6 +87,8 @@ class CutModel(hypney.WrappedModel):
             raise ValueError("Cut should have same length as observables")
         if any([len(c) != 2 for c in cut]):
             raise ValueError("Cut should be a tuple of 2-tuples")
+        if not all([isinstance(a, (int, float, type(None))) for c in cut for a in c]):
+            raise ValueError("Cut should be a tuple of 2-tuples of scalars/None")
         # Replace any None's by +-inf
         cut = tuple(
             [
@@ -113,8 +115,7 @@ class CutModel(hypney.WrappedModel):
     def _corners_cdf(self, params: dict):
         """Return CDF at the self._corner_points()"""
         # Avoid calling high-level CDF here, would cause double parameter expansion
-        result = self._orig_model(data=self._corner_points())._cdf(params=params)
-        return result
+        return self._orig_model(data=self._corner_points())._cdf(params=params)
 
     def _cut_efficiency(self, params: dict, corners_cdf=None):
         if self._cut is NoCut:
@@ -127,7 +128,9 @@ class CutModel(hypney.WrappedModel):
         # + in upper right.
         # TODO: Not sure this is correct for n > 2!
         # (for n=3 looks OK, for higher n I can't draw/visualize)
-        return ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum()
+        result = ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum(axis=-1)
+        assert result.max() <= 1
+        return result
 
     def apply_cut(self, data=hypney.NotChanged):
         return self(data=data)._apply_cut().raw
@@ -185,13 +188,15 @@ class CutModel(hypney.WrappedModel):
     def _cdf(self, params: dict):
         if self.n_dim > 1:
             raise NotImplementedError("nD cut CDF still todo...")
-        c_low, c_high = self._corners_cdf(params)
+        corners_cdf = self._corners_cdf(params)
+        c_low, c_high = corners_cdf[..., 0], corners_cdf[..., 1]
         return ((self._orig_model._cdf(params) - c_low) / (c_high - c_low)).clip(0, 1)
 
     def _ppf(self, params: dict):
         if self.n_dim > 1:
             raise NotImplementedError("nD cut PPF still todo...")
-        c_low, c_high = self._corners_cdf(params)
+        corners_cdf = self._corners_cdf(params)
+        c_low, c_high = corners_cdf[..., 0], corners_cdf[..., 1]
 
         # self.quantiles == (orig_quantiles - c_low).clip(0, None) / (c_high - c_low)
         # Cut always shrinks region and 0 <= quantiles <= 1, so clip never binds
