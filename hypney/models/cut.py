@@ -112,15 +112,8 @@ class CutModel(hypney.WrappedModel):
 
     def _corners_cdf(self, params: dict):
         """Return CDF at the self._corner_points()"""
-        # Attention: calling high-level CDF.
-        # This may or will expand our params again..
-        result = ep.astensor(
-            self._orig_model.cdf(data=self._corner_points(), params=params)
-        )
-        # TODO: why does the expansion only trigger sometimes?
-        # Fortunately there are always >= 2 corners...
-        if result.shape[0] == 1:
-            return result[0]
+        # Avoid calling high-level CDF here, would cause double parameter expansion
+        result = self._orig_model(data=self._corner_points())._cdf(params=params)
         return result
 
     def _cut_efficiency(self, params: dict, corners_cdf=None):
