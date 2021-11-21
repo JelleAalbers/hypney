@@ -29,20 +29,20 @@ class CutModel(hypney.WrappedModel):
 
     # TODO: add docs warning about not autocutting data
 
-    cut = NoCut
+    _cut = NoCut    # .cut is a model Method
     _passes_cut: ep.Tensor
 
     def __init__(
         self, orig_model: hypney.Model = hypney.NotChanged, cut=NoCut, *args, **kwargs
     ):
-        self.cut = self.validate_cut(cut)
+        self._cut = self.validate_cut(cut)
         if cut != NoCut:
             kwargs.setdefault(
                 "observables",
                 tuple(
                     [
                         obs._replace(min=_min, max=_max)
-                        for (_min, _max), obs in zip(self.cut, orig_model.observables)
+                        for (_min, _max), obs in zip(self._cut, orig_model.observables)
                     ]
                 ),
             )
@@ -54,9 +54,9 @@ class CutModel(hypney.WrappedModel):
         # Compute which events pass cut
         # Start with all passed
         passed = (1 + 0 * self.data[:, 0]) > 0
-        if self.cut == NoCut:
+        if self._cut == NoCut:
             return passed
-        for dim_i, (l, r) in enumerate(self.cut):
+        for dim_i, (l, r) in enumerate(self._cut):
             passed *= (l <= self.data[:, dim_i]) * (self.data[:, dim_i] < r)
         self._passes_cut = passed
 
@@ -106,7 +106,7 @@ class CutModel(hypney.WrappedModel):
     def _corner_points(self):
         """Return (n_corners, n_dim) nested list of corner points"""
         return [
-            [c[int(0.5 * _sign + 0.5)] for (c, _sign) in zip(self.cut, _signs)]
+            [c[int(0.5 * _sign + 0.5)] for (c, _sign) in zip(self._cut, _signs)]
             for _signs in self._signs()
         ]
 
@@ -117,7 +117,7 @@ class CutModel(hypney.WrappedModel):
         return result
 
     def _cut_efficiency(self, params: dict, corners_cdf=None):
-        if self.cut is NoCut:
+        if self._cut is NoCut:
             return 1.0
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")
@@ -143,7 +143,7 @@ class CutModel(hypney.WrappedModel):
     def _rvs(self, size, params: dict) -> np.ndarray:
         # Simulate an excess, enough that we almost always complete in one go
         n_needed = int(
-            size + stats.nbinom(p=self.cut_efficiency(params), n=size).ppf(1 - 1e-6)
+            size + stats.nbinom(p=self._cut_efficiency(params).numpy(), n=size).ppf(1 - 1e-6)
         )
         while True:
             d = self._orig_model.rvs(size=n_needed, params=params)

@@ -8,7 +8,7 @@ def test_cut():
     m_base = hypney.models.norm()
     m_cut = m_base.cut(0, None)
     assert isinstance(m_cut.simulate(), np.ndarray)
-    assert m_cut.cut == ((0, float("inf")),)
+    assert m_cut._cut == ((0, float("inf")),)
     assert m_cut.cut_efficiency() == 0.5
     assert m_cut.cut_efficiency(loc=1) == stats.norm(loc=1).sf(0)
     assert m_cut.rvs(100).min() >= 0
