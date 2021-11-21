@@ -1,12 +1,10 @@
 import hypney
-import numpy as np
 
 export, __all__ = hypney.exporter()
 
 
 @export
 class DeficitHawk(hypney.Statistic):
-
     def _compute(self, params):
         return min(self.score_cuts(params))
 
@@ -24,7 +22,6 @@ class DeficitHawk(hypney.Statistic):
         raise NotImplementedError
 
 
-
 @export
 class FixedRegionHawk(DeficitHawk):
 
@@ -34,6 +31,10 @@ class FixedRegionHawk(DeficitHawk):
     def __init__(self, *args, cuts, **kwargs):
         self.cuts = cuts
         super().__init__(*args, **kwargs)
+        if len(self.model.param_names) > 1:
+            raise NotImplementedError(
+                "FixedRegionHawk supports only 1-parameter models"
+            )
 
     def _init_data(self):
         super()._init_data()
@@ -41,7 +42,8 @@ class FixedRegionHawk(DeficitHawk):
             # TODO: Profiling and nuisance params will not work as expected,
             # right? Not directed anymore? Make signed LR that forbids profiling?
             hypney.statistics.SignedPLR(self.model.cut(cut, cut_data=True))
-            for cut in self.cuts]
+            for cut in self.cuts
+        ]
 
     def score_cuts(self, params):
         return [lr._compute(params) for lr in self.cut_lrs]
@@ -51,7 +53,8 @@ class FixedRegionHawk(DeficitHawk):
             i=cut_i,
             cut=self.cuts[cut_i],
             lr=self.cut_lrs[cut_i],
-            model=self.cut_lrs[cut_i].model)
+            model=self.cut_lrs[cut_i].model,
+        )
 
     # def extra_hash_dict(self):
     #     return dict(regions=self.regions)

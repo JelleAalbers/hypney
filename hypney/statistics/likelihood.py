@@ -41,7 +41,7 @@ class LikelihoodRatio(hypney.Statistic):
 class PLR(LikelihoodRatio):
     # Dangerous! Goes down then up with rate poi, not nice / rectified / whatever
 
-    def __init__(self, *args, poi='rate', **kwargs):
+    def __init__(self, *args, poi="rate", **kwargs):
         if isinstance(poi, str):
             poi = (poi,)
         self.poi = tuple(poi)
@@ -64,7 +64,7 @@ class PLR(LikelihoodRatio):
         )
         # Probably slower alternative:
         # conditional_ll = LogLikelihood(self.model(fix=self._filter_poi(params)))
-        return self.ll_conditional_fit - self.ll_bestfit
+        return -2 * (self.ll_conditional_fit - self.ll_bestfit)
 
     def _build_dist(self):
         return hypney.models.chi2(df=len(self.poi)).freeze()
@@ -72,7 +72,6 @@ class PLR(LikelihoodRatio):
 
 @export
 class PLROrZero(PLR):
-
     def __init__(self, *args, zero_if="high", **kwargs):
         super().__init__(*args, **kwargs)
         assert zero_if in ("high", "low")
@@ -93,16 +92,13 @@ class PLROrZero(PLR):
 
 @export
 class SignedPLR(PLR):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def _compute(self, params):
         result = super()._compute(params)
-        if params[self.only_poi] > self.bestfit[self.only_poi]:
-            # High / Excess hypothesis (if poi ~ rate)
+        if self.bestfit[self.only_poi] > params[self.only_poi]:
+            # Excess-like result: positive
             return result
         else:
-            # Low / Deficit hypothesis (if poi ~ rate)
+            # Deficit-like result: negative
             return -result
 
     def _build_dist(self):

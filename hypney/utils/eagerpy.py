@@ -98,7 +98,7 @@ def average_axis0(x, weights):
     weights = astensor(weights, match_type=x)
     # Add as many ones to shape as we need
     while len(weights.shape) < len(x.shape):
-        weights = weights[...,None]
+        weights = weights[..., None]
     return ep.sum(x * weights, axis=0) / ep.sum(weights, axis=0)
 
 

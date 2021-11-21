@@ -29,7 +29,7 @@ class CutModel(hypney.WrappedModel):
 
     # TODO: add docs warning about not autocutting data
 
-    _cut = NoCut    # .cut is a model Method
+    _cut = NoCut  # .cut is a model Method
     _passes_cut: ep.Tensor
 
     def __init__(
@@ -128,7 +128,9 @@ class CutModel(hypney.WrappedModel):
         # + in upper right.
         # TODO: Not sure this is correct for n > 2!
         # (for n=3 looks OK, for higher n I can't draw/visualize)
-        result = ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum(axis=-1)
+        result = ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum(
+            axis=-1
+        )
         assert result.max() <= 1
         return result
 
@@ -146,7 +148,8 @@ class CutModel(hypney.WrappedModel):
     def _rvs(self, size, params: dict) -> np.ndarray:
         # Simulate an excess, enough that we almost always complete in one go
         n_needed = int(
-            size + stats.nbinom(p=self._cut_efficiency(params).numpy(), n=size).ppf(1 - 1e-6)
+            size
+            + stats.nbinom(p=self._cut_efficiency(params).numpy(), n=size).ppf(1 - 1e-6)
         )
         while True:
             d = self._orig_model.rvs(size=n_needed, params=params)

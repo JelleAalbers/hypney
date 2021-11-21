@@ -151,13 +151,19 @@ class Mixture(AssociativeCombination):
     ##
 
     def _rate_per_model(self, params: dict) -> ep.TensorType:
-        return self.stack_axis0([m._rate(ps) for m, ps in self._iter_models_params(params)])
+        return self.stack_axis0(
+            [m._rate(ps) for m, ps in self._iter_models_params(params)]
+        )
 
     def _mean_per_model(self, params: dict) -> ep.TensorType:
-        return self.stack_axis0([m._mean(ps) for m, ps in self._iter_models_params(params)])
+        return self.stack_axis0(
+            [m._mean(ps) for m, ps in self._iter_models_params(params)]
+        )
 
     def _var_per_model(self, params: dict) -> ep.TensorType:
-        return self.stack_axis0([m._var(ps) for m, ps in self._iter_models_params(params)])
+        return self.stack_axis0(
+            [m._var(ps) for m, ps in self._iter_models_params(params)]
+        )
 
     def _f_per_model(self, params):
         mus = self._rate_per_model(params)
