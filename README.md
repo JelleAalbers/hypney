@@ -56,7 +56,7 @@ Other packages
 
   * Hypney's has several similarities to [zfit](https://github.com/zfit/zfit) with the hypotest package in [hepstats](https://github.com/scikit-hep/hepstats). These have a somewhat different API, similar to [RooFit](https://root.cern/manual/roofit/) and [GooFit](https://github.com/GooFit/GooFit).
 
-  * [pyhf](https://github.com/scikit-hep/pyhf) specializes in models that interpolate between histograms, as does [histfactory](https://root.cern/doc/master/group__HistFactory.html). Hypney can also interpolate histograms, but works with unbinned data. If you have many more events than bins, pyhf will be much faster.
+  * [pyhf](https://github.com/scikit-hep/pyhf) specializes in models that interpolate between histograms, as does its older C++ sister [histfactory](https://root.cern/doc/master/group__HistFactory.html). Hypney can also interpolate histograms, but works with unbinned data. If you have many more events than bins, pyhf will be much faster.
 
   * [pymc3](https://github.com/pymc-devs/pymc3) specializes in Bayesian analysis. Bayesians could certainly adapt their samplers to work on hypney's models, but might wonder why we treat observables, parameters and statistics so differently -- isn't everything a random variable?
 

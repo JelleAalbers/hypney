@@ -135,7 +135,7 @@ def test_vectorization():
 
     # Batch size 1
     data = np.array([1,])
-    rates = [1,]
+    rates = [1]
     m = m(data=data)
     np.testing.assert_equal(m.rate(rate=rates), [m.rate(rate=x) for x in rates])
     np.testing.assert_equal(
