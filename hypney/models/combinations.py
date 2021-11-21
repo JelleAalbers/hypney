@@ -166,17 +166,21 @@ class Mixture(AssociativeCombination):
     def stack_axis0(self, xs):
         """Stack list of results from low-level methods along axis=0
 
-        Appends one-size dimensions until dimensionality matches.
-        This is not guaranteed because we call low-level methods without
+        Prepends one-size dimensions until dimensionality matches.
+
+        A match is not guaranteed because we call low-level methods without
         the shape harmonization in _scalar_/_tensor_method.
-        Maybe one model uses tensor-valued params, while another has no params.
+            (One model may use tensor-valued params, while another has no params;
+             this causes some elements to have extra ones / batch_size dimensions)
+
+        TODO: this needs more testing, plenty of edge cases possible...
         """
         max_ndim = max([len(x.shape) for x in xs])
         y = []
         for x in xs:
             # Append ones if shape does not match
             while len(x.shape) < max_ndim:
-                x = x[...,None]
+                x = x[None, ...]
             y.append(x)
         return ep.stack(y, axis=0)
 
