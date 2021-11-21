@@ -15,7 +15,8 @@ class DeficitHawk(hypney.Statistic):
 
     # For extra info / debugging
 
-    def best_cut(self, params):
+    def best_cut(self, params=None):
+        params = self.model.validate_params(params)
         best_i = self.model.backend.argmin(self.score_cuts(params))
         return self._cut_info(params, best_i)
 
@@ -37,6 +38,8 @@ class FixedRegionHawk(DeficitHawk):
     def _init_data(self):
         super()._init_data()
         self.cut_lrs = [
+            # TODO: Profiling and nuisance params will not work as expected,
+            # right? Not directed anymore? Make signed LR that forbids profiling?
             hypney.statistics.SignedPLR(self.model.cut(cut, cut_data=True))
             for cut in self.cuts]
 

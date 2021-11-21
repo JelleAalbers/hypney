@@ -137,10 +137,7 @@ class CutModel(hypney.WrappedModel):
         return ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum()
 
     def apply_cut(self, data=hypney.NotChanged):
-        return self.apply_cut_(data=data).raw
-
-    def apply_cut_(self, data=hypney.NotChanged):
-        return self(data=data)._apply_cut()
+        return self(data=data)._apply_cut().raw
 
     def _apply_cut(self):
         return self.data[self._passes_cut]
@@ -148,7 +145,7 @@ class CutModel(hypney.WrappedModel):
     # Simulation
 
     def _simulate(self, params) -> np.ndarray:
-        return self._apply_cut(self._simulate(params))
+        return self.apply_cut(data=self._orig_model._simulate(params))
 
     def _rvs(self, size, params: dict) -> np.ndarray:
         # Simulate an excess, enough that we almost always complete in one go
