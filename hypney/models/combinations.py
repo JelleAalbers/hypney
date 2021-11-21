@@ -98,27 +98,24 @@ class Mixture(AssociativeCombination):
 
     def _pdf(self, params: dict) -> ep.TensorType:
         return hypney.utils.eagerpy.average_axis0(
-            ep.stack(
+            self.stack_axis0(
                 [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
-                axis=0,
             ),
             self._f_per_model(params),
         )
 
     def _cdf(self, params: dict) -> ep.TensorType:
         return hypney.utils.eagerpy.average_axis0(
-            ep.stack(
+            self.stack_axis0(
                 [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
-                axis=0,
             ),
             weights=self._f_per_model(params),
         )
 
     def _diff_rate(self, params: dict) -> ep.TensorType:
         return ep.sum(
-            ep.stack(
-                [m._diff_rate(params=ps) for m, ps in self._iter_models_params(params)],
-                axis=0,
+            self.stack_axis0(
+                [m._diff_rate(params=ps) for m, ps in self._iter_models_params(params)]
             ),
             axis=0,
         )
@@ -154,17 +151,34 @@ class Mixture(AssociativeCombination):
     ##
 
     def _rate_per_model(self, params: dict) -> ep.TensorType:
-        return ep.stack([m._rate(ps) for m, ps in self._iter_models_params(params)])
+        return self.stack_axis0([m._rate(ps) for m, ps in self._iter_models_params(params)])
 
     def _mean_per_model(self, params: dict) -> ep.TensorType:
-        return ep.stack([m._mean(ps) for m, ps in self._iter_models_params(params)])
+        return self.stack_axis0([m._mean(ps) for m, ps in self._iter_models_params(params)])
 
     def _var_per_model(self, params: dict) -> ep.TensorType:
-        return ep.stack([m._var(ps) for m, ps in self._iter_models_params(params)])
+        return self.stack_axis0([m._var(ps) for m, ps in self._iter_models_params(params)])
 
     def _f_per_model(self, params):
         mus = self._rate_per_model(params)
         return mus / mus.sum()
+
+    def stack_axis0(self, xs):
+        """Stack list of results from low-level methods along axis=0
+
+        Appends one-size dimensions until dimensionality matches.
+        This is not guaranteed because we call low-level methods without
+        the shape harmonization in _scalar_/_tensor_method.
+        Maybe one model uses tensor-valued params, while another has no params.
+        """
+        max_ndim = max([len(x.shape) for x in xs])
+        y = []
+        for x in xs:
+            # Append ones if shape does not match
+            while len(x.shape) < max_ndim:
+                x = x[...,None]
+            y.append(x)
+        return ep.stack(y, axis=0)
 
 
 @export
