@@ -133,6 +133,15 @@ def test_vectorization():
         m.diff_rate(rate=rates), np.stack([m.diff_rate(rate=x) for x in rates])
     )
 
+    # Batch size 1
+    data = np.array([1,])
+    rates = [1,]
+    m = m(data=data)
+    np.testing.assert_equal(m.rate(rate=rates), [m.rate(rate=x) for x in rates])
+    np.testing.assert_equal(
+        m.diff_rate(rate=rates), np.stack([m.diff_rate(rate=x) for x in rates])
+    )
+
     # Param matrix
     rates = [0, 1, 2]
     locs = [0, 1, 3, 2]
@@ -151,9 +160,9 @@ def test_vectorization():
     # Multiple datasets (nontrivial sample_shape)
     # This is experimental...
     ##
-    data = np.array([[1, 2, 3], [3, 4, 5]])[..., None]
-    assert data.shape == (2, 3, 1)
-    pdf = m.pdf(data)
-    assert isinstance(pdf, np.ndarray)
-    assert pdf.shape == (2, 3)
-    np.testing.assert_equal(pdf, [m.pdf(data[0]), m.pdf(data[1])])
+    # data = np.array([[1, 2, 3], [3, 4, 5]])[..., None]
+    # assert data.shape == (2, 3, 1)
+    # pdf = m.pdf(data)
+    # assert isinstance(pdf, np.ndarray)
+    # assert pdf.shape == (2, 3)
+    # np.testing.assert_equal(pdf, [m.pdf(data[0]), m.pdf(data[1])])
