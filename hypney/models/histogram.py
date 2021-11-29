@@ -45,26 +45,33 @@ def from_samples(samples, bin_edges=None, bin_count_multiplier=1):
         samples = samples[is_fin]
 
     if bin_edges is None:
-        # Use the Freedman-Diaconis rule to guess a bin width
-        iqr = stats.iqr(samples)
-        max_offset = 0
-        if iqr == 0:
-            # Can happen for discrete statistics, e.g. count with mean 0.01
-            iqr = 1.34 * samples.std()
-        if iqr == 0:
-            # All values are the same; return a delta function
-            # rather than a histogram
-            return hypney.models.DiracDelta(loc=samples[0])
-        width_fd = 2 * iqr / len(samples) ** (1 / 3)
-
-        # The final bin's right edge is inclusive (see np.histogram)
-        # So don't fret about masses at the end.
-        # But if all values are the same, we need to offset max
-        # to obtain a finite bin width.
-        mi, ma = samples.min(), samples.max() + max_offset
-        bin_edges = np.linspace(
-            mi, ma, int(bin_count_multiplier * (ma - mi) / width_fd)
-        )
+        bin_edges = guess_bin_edges(samples, bin_count_multiplier)
+    if not bin_edges:
+        # All samples are the same, return a delta function distribution
+        return hypney.models.DiracDelta(loc=samples[0])
 
     histogram, bin_edges = np.histogram(samples, bins=bin_edges)
     return from_histogram(histogram, bin_edges)
+
+
+@export
+def guess_bin_edges(samples, bin_count_multiplier):
+    # Use the Freedman-Diaconis rule to guess a bin width
+    iqr = stats.iqr(samples)
+    max_offset = 0
+    if iqr == 0:
+        # Can happen for discrete statistics, e.g. count with mean 0.01
+        iqr = 1.34 * samples.std()
+    if iqr == 0:
+        # All samples are the same!
+        return []
+    width_fd = 2 * iqr / len(samples) ** (1 / 3)
+
+    # The final bin's right edge is inclusive (see np.histogram)
+    # So don't fret about masses at the end.
+    # But if all values are the same, we need to offset max
+    # to obtain a finite bin width.
+    mi, ma = samples.min(), samples.max() + max_offset
+    return np.linspace(
+        mi, ma, int(bin_count_multiplier * (ma - mi) / width_fd)
+    )
