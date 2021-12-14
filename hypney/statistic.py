@@ -116,6 +116,8 @@ class Statistic:
 
     def compute(self, data=NotChanged, params: dict = None, **kwargs) -> ep.TensorType:
         self = self.set(data=data)
+        if self.data is None:
+            raise ValueError("Data must be set first")
         return self.model._scalar_method(self._compute, params=params, **kwargs)
 
     def _compute(self, params):

@@ -33,9 +33,15 @@ class CutModel(hypney.WrappedModel):
     _passes_cut: ep.Tensor
 
     def __init__(
-        self, orig_model: hypney.Model = hypney.NotChanged, cut=NoCut, *args, **kwargs
+        self,
+        orig_model: hypney.Model = hypney.NotChanged,
+        cut=NoCut,
+        cut_type=hypney.DEFAULT_CUT_TYPE,
+        *args,
+        **kwargs,
     ):
         self._cut = self.validate_cut(cut)
+        self.cut_type = cut_type
         if cut != NoCut:
             kwargs.setdefault(
                 "observables",
@@ -57,7 +63,16 @@ class CutModel(hypney.WrappedModel):
         if self._cut == NoCut:
             return passed
         for dim_i, (l, r) in enumerate(self._cut):
-            passed *= (l <= self.data[:, dim_i]) * (self.data[:, dim_i] < r)
+            x = self.data[:, dim_i]
+            if self.cut_type == "open":
+                passed *= (l < x) * (x < r)
+            elif self.cut_type == "halfopen":
+                passed *= (l <= x) * (x < r)
+            elif self.cut_type == "closed":
+                passed *= (l <= x) * (x <= r)
+            else:
+                raise ValueError(f"Unkown cut type {self.cut_type}")
+
         self._passes_cut = passed
 
     def _init_quantiles(self):
@@ -122,12 +137,18 @@ class CutModel(hypney.WrappedModel):
             return 1.0
         if not hasattr(self, "cdf"):
             raise NotImplementedError("Nontrivial cuts require a cdf")
-        if corners_cdf is None:
-            corners_cdf = self._corners_cdf(params)
+        if any([o.integer for o in self.observables]):
+            raise NotImplementedError(
+                "Cut efficiency not yet implemented for discrete models"
+                " (would depend on cut_type"
+            )
+
         # Evaluate CDF at rectangular endpoints, add up with alternating signs,
         # + in upper right.
         # TODO: Not sure this is correct for n > 2!
         # (for n=3 looks OK, for higher n I can't draw/visualize)
+        if corners_cdf is None:
+            corners_cdf = self._corners_cdf(params)
         result = ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum(
             axis=-1
         )

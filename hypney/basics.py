@@ -11,6 +11,7 @@ export, __all__ = hp.exporter(
         "DEFAULT_OBSERVABLE",
         "RATE_LOC_PARAMS",
         "RATE_LOC_SCALE_PARAMS",
+        "DEFAULT_CUT_TYPE",
     ]
 )
 
@@ -43,6 +44,9 @@ DEFAULT_SCALE_PARAM = Parameter(name="scale", min=0, max=float("inf"), default=1
 
 RATE_LOC_PARAMS = (DEFAULT_RATE_PARAM, DEFAULT_LOC_PARAM)
 RATE_LOC_SCALE_PARAMS = RATE_LOC_PARAMS + (DEFAULT_SCALE_PARAM,)
+
+# open, halfopen, or closed
+DEFAULT_CUT_TYPE = "halfopen"
 
 
 @export

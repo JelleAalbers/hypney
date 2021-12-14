@@ -222,7 +222,7 @@ class Model:
             self, transform_params=transform_params, *args, **kwargs
         )
 
-    def cut(self, *args, cut_data=False, **kwargs):
+    def cut(self, *args, cut_data=False, cut_type=hypney.DEFAULT_CUT_TYPE, **kwargs):
         """Return new model with observables cut to a rectangular region
 
         Args: left-right boundaries, specified in one of many legal ways.
@@ -242,7 +242,7 @@ class Model:
         if kwargs:
             cut = kwargs
 
-        cut_model = hypney.models.CutModel(self, cut)
+        cut_model = hypney.models.CutModel(self, cut, cut_type=cut_type)
 
         if cut_data and self.data is not None:
             return cut_model(data=cut_model.apply_cut(cut_model.data))
