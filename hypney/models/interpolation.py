@@ -29,6 +29,7 @@ class Interpolation(hypney.Model):
         param_specs: ty.Union[tuple, dict],
         methods: ty.Tuple,
         progress=False,
+        map=map,
         *args,
         **kwargs
     ):
@@ -70,13 +71,18 @@ class Interpolation(hypney.Model):
             progress_iter = lambda x: x
 
         # Create the grid of anchor models
-        # TODO: support lazy map / multiprocessing? Unify with progress bar?
-        # Star morphing?
-        # Some way for user to extend this?
-        self.anchor_models = {
-            anchor_vals: model_builder(dict(zip(param_names, anchor_vals)))
-            for anchor_vals in progress_iter(anchor_grid)
-        }
+        anchor_grid_kwargs = [
+            dict(zip(param_names, anchor_vals)) for anchor_vals in anchor_grid
+        ]
+        self.anchor_models = dict(
+            zip(
+                anchor_grid,
+                hypney.utils.misc.progress_iter(progress)(
+                    map(model_builder, anchor_grid_kwargs)
+                ),
+            )
+        )
+
         self._some_model = next(iter(self.anchor_models.values()))
 
         self.interp_maker = hypney.utils.interpolation.InterpolatorBuilder(
