@@ -1,7 +1,9 @@
 from copy import copy
+import gzip
 import itertools
 import functools
 import typing as ty
+import pickle
 
 import eagerpy as ep
 import numpy as np
@@ -163,6 +165,24 @@ class Model:
         if not hasattr(f, "__func__"):
             return True
         return f.__func__ is not getattr(from_base, method_name)
+
+    @staticmethod
+    def _add_suffix(filename):
+        suffix = ".pkl.gz"
+        if not filename.endswith(suffix):
+            filename += suffix
+        return filename
+
+    def save(self, filename):
+        """Save model to a gzipped pickle file"""
+        with gzip.open(self._add_suffix(filename), mode="wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, filename):
+        """Load model from a gzipped pickle file"""
+        with gzip.open(cls._add_suffix(filename), mode="rb") as f:
+            return pickle.load(f)
 
     ##
     # Creating new models from old

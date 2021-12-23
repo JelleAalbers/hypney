@@ -82,6 +82,15 @@ def test_uniform(tensorlib):
             m = pickle.load(f)
     assert m.defaults["loc"] == 0.5
 
+    # Save/load are convenient interfaces to pickle
+    m = hypney.models.uniform(loc=0.4, backend=tensorlib)
+    with tempfile.NamedTemporaryFile() as tempf:
+        fn = tempf.name
+        m.save(fn)
+        del m
+        m = hypney.Model.load(fn)
+    assert m.defaults["loc"] == 0.4
+
 
 def test_beta():
     m = hypney.models.beta(a=0.5, b=0.5, rate=100)
