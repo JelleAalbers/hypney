@@ -121,13 +121,13 @@ class Minimum(hypney.Estimator):
         )
         return [possible_returns[x] for x in self.return_kind]
 
-    def objective(self, params, autograd):
+    def objective(self, params: ep.Tensor, autograd):
         result, grad = self._objective(params, autograd)
         # copy(grad) is needed since e.g. L-BFGS-B modifies it in-place
         self.history.append([params, result, copy(grad)])
         return result, grad
 
-    def _objective(self, params, autograd):
+    def _objective(self, params: ep.Tensor, autograd):
         if autograd:
             nan_result = float("nan"), np.ones(len(params)) * float("nan")
         else:

@@ -55,32 +55,15 @@ class Interpolation(hypney.Model):
         anchor_values = [p.anchors for p in param_specs if p.anchors]
         anchor_grid = list(itertools.product(*anchor_values))
 
-        # Use a progress bar if desired.
-        # TODO: does not belong here, put in utils or something
-        if progress is True:
-            try:
-                from tqdm import tqdm
-
-                progress_iter = tqdm
-            except ImportError:
-                progress_iter = lambda x: x
-        elif progress:
-            # user may have passed a custom tqdm, e.g. tqdm.notebook
-            progress_iter = partial(progress, desc="Building models")
-        else:
-            progress_iter = lambda x: x
-
         # Create the grid of anchor models
         anchor_grid_kwargs = [
             dict(zip(param_names, anchor_vals)) for anchor_vals in anchor_grid
         ]
+        progress_iter = hypney.utils.misc.progress_iter(
+            progress, desc="Building models", total=len(anchor_grid)
+        )
         self.anchor_models = dict(
-            zip(
-                anchor_grid,
-                hypney.utils.misc.progress_iter(progress)(
-                    map(model_builder, anchor_grid_kwargs)
-                ),
-            )
+            zip(anchor_grid, progress_iter(map(model_builder, anchor_grid_kwargs)))
         )
 
         self._some_model = next(iter(self.anchor_models.values()))

@@ -170,7 +170,7 @@ class OptItvOneCut(hypney.Statistic):
         # load the p_smaller_x table; store it with the class
         # so we don't load this for every interval!
         # TODO: where to store file in repo?
-        # TODO: This won't paralellize well.. maybe we should just load on import?
+        # TODO: This won't parallelize well.. maybe we should just load on import?
         if hasattr(self, "_p_smaller_x_itp"):
             return
 
@@ -216,15 +216,6 @@ class OptItvOneCut(hypney.Statistic):
         """Probability of finding a largest N-event-containing interval
         smaller than frac (i.e. with less fraction of expected signal)
         """
-        # if mu > self._itp_max_mu:
-        #     # Above interpolator range: use maximum gap
-        #     # TODO: this should throw some warning
-        #     if n == 0:
-        #         # Use exact formula for gaps
-        #         return p_smaller_x_0(mu, frac)
-        #     else:
-        #         # Return giant meaningless value for other intervals
-        #         return float('inf')
         return self.__class__._p_smaller_x_itp([mu, n, frac]).item()
 
 

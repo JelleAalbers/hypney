@@ -25,7 +25,7 @@ def maybe_jit(f):
 
 # See https://stackoverflow.com/questions/44346188
 # and https://stackoverflow.com/questions/62056035
-# (21! and above are no longer integers)
+# (21! and above are no longer 64-bit integers)
 FACTORIALS = np.array(
     [
         1,

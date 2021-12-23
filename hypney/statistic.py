@@ -193,13 +193,14 @@ class Statistic:
         return dist.freeze()
 
     def interpolate_dist_from_toys(
-        self, anchors: dict, progress=True, methods="ppf", **kwargs
+        self, anchors: dict, progress=True, methods="ppf", map=map, **kwargs
     ):
         assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
         return hypney.models.Interpolation(
             functools.partial(self.dist_from_toys, **kwargs),
             anchors,
             progress=progress,
+            map=map,
             methods=methods,
         )
 
