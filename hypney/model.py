@@ -720,6 +720,7 @@ class WrappedModel(Model):
             # No need to make a copy now; any attempted state change
             # (set data, change defaults...) will trigger that
             self._orig_model = orig_model
+        kwargs.setdefault("name", orig_model.name)
         kwargs.setdefault("observables", orig_model.observables)
         kwargs.setdefault("param_specs", orig_model.param_specs)
         # TODO: this causes _orig_model._init_data to often be run twice...

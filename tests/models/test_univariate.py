@@ -9,6 +9,13 @@ import hypney
 import hypney.utils.eagerpy as ep_util
 
 
+def test_naming():
+    m = hypney.models.uniform(name='bla')
+    assert m.name == 'bla'
+    # Names are preserved in WrappedModel
+    assert m.fix_except('rate').name == 'bla'
+
+
 def test_uniform(tensorlib):
     m = hypney.models.uniform(backend=tensorlib)
     assert m.rate() == hypney.DEFAULT_RATE_PARAM.default
