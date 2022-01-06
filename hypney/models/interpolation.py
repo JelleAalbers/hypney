@@ -24,7 +24,7 @@ class Interpolation(hypney.Model):
 
     def __init__(
         self,
-        # Called with params, outputs model
+        # Called with params (dict of scalars), outputs model
         model_builder: callable,
         param_specs: ty.Union[tuple, dict],
         methods: ty.Tuple,
@@ -51,14 +51,17 @@ class Interpolation(hypney.Model):
                 ]
             )
 
-        param_names = [p.name for p in param_specs]
-        anchor_values = [p.anchors for p in param_specs if p.anchors]
-        anchor_grid = list(itertools.product(*anchor_values))
+        self.interpolated_params = [p for p in param_specs if p.anchors]
+        param_names = [p.name for p in self.interpolated_params]
+        anchor_values = [p.anchors for p in self.interpolated_params]
 
-        # Create the grid of anchor models
+        # List of all possible anchor vals (long 1d list of parameter tuples)
+        anchor_grid = list(itertools.product(*anchor_values))
+        # List of possible anchor params (long 1d list of param dicts)
         anchor_grid_kwargs = [
             dict(zip(param_names, anchor_vals)) for anchor_vals in anchor_grid
         ]
+
         progress_iter = hypney.utils.misc.progress_iter(
             progress, desc="Building models", total=len(anchor_grid)
         )
@@ -66,15 +69,16 @@ class Interpolation(hypney.Model):
             zip(anchor_grid, progress_iter(map(model_builder, anchor_grid_kwargs)))
         )
 
-        self._some_model = next(iter(self.anchor_models.values()))
-
         self.interp_maker = hypney.utils.interpolation.InterpolatorBuilder(
             anchor_values
         )
         self._interpolators = dict()
 
         # Add specs of any non-interpolated params
-        # TODO: check other models agree on these?
+        # TODO: this is tricky. I guess idea is allowing rate as a parameter
+        # in a shape interpolation. Works if we interpolate pdf, not diff_rate.
+        # In general, shouldn't other params be forced at constants?
+        self._some_model = next(iter(self.anchor_models.values()))
         param_specs = param_specs + tuple(
             [
                 p
@@ -84,9 +88,10 @@ class Interpolation(hypney.Model):
         )
 
         # Build interpolators for methods that don't take data
-        # (we will change tensorlib type as needed in init_data)
         for method_name in self.other_methods_to_interpolate:
-            self._build_interpolator(method_name, tensorlib=ep.numpy)
+            self._maybe_build_interpolator(
+                method_name, tensorlib=self._some_model.backend
+            )
 
         # Can't call this earlier; may trigger interpolator building
         # if data is given on init
@@ -98,22 +103,20 @@ class Interpolation(hypney.Model):
         )
 
     def _init_data(self):
-        # Update anchor models to ones with appropriate data
+        # Replace anchor models with ones with data set
         self.anchor_models = {
             anchor: model(data=self.data)
             for anchor, model in self.anchor_models.items()
         }
 
         # Build interpolators for methods that take data (i.e. use self.data)
-        tensorlib = hypney.utils.eagerpy.tensorlib(self.data)
         for method_name in self.data_methods_to_interpolate:
-            # Only build interpolator if method was redefined from Model
-            if self._has_redefined("_" + method_name):
-                self._build_interpolator(method_name, tensorlib=tensorlib)
-
-        # TODO: change tensorlib of non-data-method interpolate non-data interpolators
-        for method_name in self.other_methods_to_interpolate:
-            self._build_interpolator(method_name, tensorlib=tensorlib)
+            # Only build interpolator if method was redefined in anchor models
+            # (e.g. if anchors define _pdf, don't interpolate _diff_rate too)
+            if self._some_model._has_redefined("_" + method_name):
+                self._maybe_build_interpolator(
+                    method_name, tensorlib=self._some_model.backend
+                )
 
         super()._init_data()
 
@@ -122,13 +125,12 @@ class Interpolation(hypney.Model):
             anchor: model(quantiles=self.quantiles)
             for anchor, model in self.anchor_models.items()
         }
-        tensorlib = hypney.utils.eagerpy.tensorlib(self.quantiles)
         if self._has_redefined("_ppf"):
-            self._build_interpolator("ppf", tensorlib=tensorlib)
+            self._maybe_build_interpolator("ppf", tensorlib=self._some_model.backend)
 
-    def _build_interpolator(self, itp_name: str, tensorlib):
+    def _maybe_build_interpolator(self, itp_name: str, tensorlib):
         if itp_name not in self.methods:
-            # User doesn't want us to interpolate
+            # Shouldn't / don't have to interpolate this method
             return
         self._interpolators[itp_name] = self.interp_maker.make_interpolator(
             # itp_name=itp_name does not work! Confusing...
@@ -136,30 +138,30 @@ class Interpolation(hypney.Model):
             tensorlib=tensorlib,
         )
 
-    def _call_interpolator(self, itp_name, params: dict = None):
-        anchor_tuple = self._params_to_anchor_tuple(params)
-        if not itp_name in self._interpolators:
-            # No interpolator was built
-            if anchor_tuple in self.anchor_models:
-                # ... but we're at an anchor, so can call a model directly
-                model = self.anchor_models[anchor_tuple]
-            else:
-                # ... so we'll have to call a fallback method
-                model = super()
-            return getattr(model, "_" + itp_name)(params)
-        params = self.validate_params(params)
-        anchor_tuple = hypney.utils.eagerpy.astensor(
-            anchor_tuple,
-            match_type=self.data if self.data is not None else np.zeros(0),
+    def _params_to_anchor_tensor(self, params):
+        """Return (batch_shape, n_params) tensor given dict of param tensors
+        """
+        return ep.stack(
+            [params[p.name] for p in self.param_specs if p.anchors], axis=-1
         )
 
-        result = self._interpolators[itp_name](anchor_tuple[None, :])[0]
-        if itp_name in self.data_methods_to_interpolate or itp_name == "ppf":
-            # Vector result
-            return ep.astensor(result)
-        else:
-            # Scalar result
-            return result
+    def _call_interpolator(self, itp_name, params: dict = None):
+        if not itp_name in self._interpolators:
+            # No interpolator was built, call a fallback method
+            # (e.g. Model._log_differential_rate, which will may call _pdf
+            #  for which we may have an interpolator)
+            model = super()
+            return getattr(model, "_" + itp_name)(params)
+
+        # Stack parameters to make
+        # (batch_shape, n_params) tensor
+        anchor_tensor = self._params_to_anchor_tensor(params)
+
+        # Call interpolator to get result
+        # not sure if [0] undoes 'expanded' batch shape or some
+        # interpolator convention... but vectorization tests pass
+        result = self._interpolators[itp_name](anchor_tensor)[0]
+        return result
 
     def _params_to_anchor_tuple(self, params):
         # TODO: this will fail for non-trivial batch_shape!
@@ -167,14 +169,19 @@ class Interpolation(hypney.Model):
 
     def _call_anchor_method(self, method_name, param_tuple):
         """Call Model.method_name for anchor model at params"""
-        # Make sure to call external methods of the anchor models,
-        # so they fill in their default params.
-        # (especially convenient for non-interpolated params. Otherwise we'd
-        #  need quite some complexity in _call_anchor_method / _params_to_anchor_tuple)
-        result = getattr(self.anchor_models[param_tuple], method_name)()
-        if method_name in self.data_methods_to_interpolate or method_name == "ppf":
-            result = ep.astensor(result)
-        return result
+        # Which anchor to call?
+        anchor_model = self.anchor_models[param_tuple]
+
+        # Call appropriate internal method with valid param dict
+        params = anchor_model.validate_params(
+            {
+                p.name: v
+                for p, v in zip(self.interpolated_params, param_tuple)
+                # TODO: Test below needed since param may already be frozen?
+                if p.name in anchor_model.defaults
+            }
+        )
+        return getattr(anchor_model, "_" + method_name)(params=params)
 
     def _rvs(self, size: int, params: dict):
         anchor = self._params_to_anchor_tuple(params)
@@ -199,7 +206,6 @@ for method_name in (
 ):
     setattr(
         Interpolation,
-        # See command in _call_anchor_method about underscore
         "_" + method_name,
         partialmethod(Interpolation._call_interpolator, method_name),
     )

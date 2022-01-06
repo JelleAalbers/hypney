@@ -24,6 +24,15 @@ def test_interpolated():
     np.testing.assert_array_almost_equal(m2.pdf(params=dict(loc=0.2)), y)
     np.testing.assert_array_almost_equal(m2.diff_rate(params=dict(loc=0.2)), y * 1000.0)
 
+    # Test vectorization
+    locs = np.array([0.2, 0, -0.2])
+    rate_list = np.array([m2.rate(loc=x) for x in locs])
+    rate_arr = m2.rate(loc=locs)
+    np.testing.assert_array_equal(rate_list, rate_arr)
+    pdf_list = np.stack([m2.pdf(loc=x) for x in locs])
+    pdf_arr = m2.pdf(loc=locs)
+    np.testing.assert_array_equal(pdf_list, pdf_arr)
+
     # No, linearly interpolated CDF is not the inverse of the linearly interpolated PPF
     # (nor is it the integral of the linearly interpolated PDF.. pretty tricky)
 
