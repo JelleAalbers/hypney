@@ -31,12 +31,15 @@ class CutModel(hypney.WrappedModel):
 
     _cut = NoCut  # .cut is a model Method
     _passes_cut: ep.Tensor
+    _fixed_eff = None
 
     def __init__(
         self,
         orig_model: hypney.Model = hypney.NotChanged,
         cut=NoCut,
         cut_type=hypney.DEFAULT_CUT_TYPE,
+        cut_data=False,
+        fixed_cut_efficiency=None,
         *args,
         **kwargs,
     ):
@@ -52,10 +55,18 @@ class CutModel(hypney.WrappedModel):
                     ]
                 ),
             )
+
+        # TODO: sneaking an arg to _init_data...
+        self._cut_data = cut_data
         super().__init__(orig_model=orig_model, *args, **kwargs)
+        self._cut_data = False
+
+        if fixed_cut_efficiency:
+            # Don't try to vectorize ... :-(
+            self._fixed_eff = fixed_cut_efficiency
 
     def _init_data(self):
-        self._orig_model = self._orig_model(data=self.data)
+        super()._init_data()
 
         # Compute which events pass cut
         # Start with all passed
@@ -74,6 +85,11 @@ class CutModel(hypney.WrappedModel):
                 raise ValueError(f"Unkown cut type {self.cut_type}")
 
         self._passes_cut = passed
+
+        if self._cut_data:
+            self.data = self.data[self._passes_cut]
+            # Could create new bool instead, maybe easier/clearer..
+            self._passes_cut = self._passes_cut[self._passes_cut]
 
     def _init_quantiles(self):
         # quantiles for the original model depend on parameters;
@@ -133,6 +149,8 @@ class CutModel(hypney.WrappedModel):
         return self._orig_model(data=self._corner_points())._cdf(params=params)
 
     def _cut_efficiency(self, params: dict, corners_cdf=None):
+        if self._fixed_eff is not None:
+            return self._fixed_eff
         if self._cut is NoCut:
             return 1.0
         if not hasattr(self, "cdf"):

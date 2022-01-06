@@ -10,10 +10,10 @@ import hypney.utils.eagerpy as ep_util
 
 
 def test_naming():
-    m = hypney.models.uniform(name='bla')
-    assert m.name == 'bla'
+    m = hypney.models.uniform(name="bla")
+    assert m.name == "bla"
     # Names are preserved in WrappedModel
-    assert m.fix_except('rate').name == 'bla'
+    assert m.fix_except("rate").name == "bla"
 
 
 def test_uniform(tensorlib):

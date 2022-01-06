@@ -43,7 +43,8 @@ class TransformedDataModel(hypney.WrappedModel):
         super().__init__(*args, **kwargs)
 
     def _init_data(self):
-        self._orig_model = self._orig_model(data=self._data_to_orig())
+        if "data" not in self._orig_already_has:
+            self._orig_model = self._orig_model(data=self._data_to_orig())
 
     def _init_quantiles(self):
         # ppf not implemented yet

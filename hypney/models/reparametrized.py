@@ -23,12 +23,6 @@ class Reparametrized(hypney.WrappedModel):
             self._transform_params = transform_params
         super().__init__(*args, **kwargs)
 
-    def _init_data(self):
-        self._orig_model = self._orig_model(data=self.data)
-
-    def _init_quantiles(self):
-        self._orig_model = self._orig_model(quantiles=self.quantiles)
-
     # Simulation
 
     def _simulate(self, params):

@@ -242,7 +242,14 @@ class Model:
             self, transform_params=transform_params, *args, **kwargs
         )
 
-    def cut(self, *args, cut_data=False, cut_type=hypney.DEFAULT_CUT_TYPE, **kwargs):
+    def cut(
+        self,
+        *args,
+        cut_data=False,
+        cut_type=hypney.DEFAULT_CUT_TYPE,
+        fixed_cut_efficiency=None,
+        **kwargs,
+    ):
         """Return new model with observables cut to a rectangular region
 
         Args: left-right boundaries, specified in one of many legal ways.
@@ -262,11 +269,13 @@ class Model:
         if kwargs:
             cut = kwargs
 
-        cut_model = hypney.models.CutModel(self, cut, cut_type=cut_type)
-
-        if cut_data and self.data is not None:
-            return cut_model(data=cut_model.apply_cut(cut_model.data))
-        return cut_model
+        return hypney.models.CutModel(
+            self,
+            cut,
+            cut_data=cut_data,
+            cut_type=cut_type,
+            fixed_cut_efficiency=fixed_cut_efficiency,
+        )
 
     def shift_and_scale(self, shift=0.0, scale=1):
         """Return model for data that has been shifted, then scaled,
@@ -395,6 +404,14 @@ class Model:
         return {pname: x[..., None] for pname, x in params.items()}
 
     def _validate_data_or_quantiles(self, x):
+        """Return x as a 1d eagerpy tensor"""
+        if isinstance(x, ep.Tensor):
+            # Great, it's already an eagerpy tensor.
+            # (Test this first, it occurs when data is passed from one model
+            #  to another)
+            # TODO: apparently this is never a 0d tensor? Are we sure?
+            return x, False
+
         if x is None:
             raise ValueError("None is not valid as data/quantiles")
         # Shorthand data specifications
@@ -723,13 +740,28 @@ class WrappedModel(Model):
         kwargs.setdefault("name", orig_model.name)
         kwargs.setdefault("observables", orig_model.observables)
         kwargs.setdefault("param_specs", orig_model.param_specs)
-        # TODO: this causes _orig_model._init_data to often be run twice...
-        # But without it self.data could be None while self._orig_model.data
-        # would be set
-        kwargs.setdefault("data", orig_model.data)
-        kwargs.setdefault("quantiles", orig_model.quantiles)
         kwargs.setdefault("backend", orig_model._backend_name)
+
+        # Don't reinitialize the original model with its old data or quantiles
+        self._orig_already_has = []
+        if "data" not in kwargs:
+            self._orig_already_has.append("data")
+            kwargs.setdefault("data", orig_model.data)
+        if "quantiles" not in kwargs:
+            self._orig_already_has.append("quantiles")
+            kwargs.setdefault("quantiles", orig_model.quantiles)
+
         super().__init__(*args, **kwargs)
+
+        self._orig_already_has = []
+
+    def _init_data(self):
+        if "data" not in self._orig_already_has:
+            self._orig_model = self._orig_model(data=self.data)
+
+    def _init_quantiles(self):
+        if "quantiles" not in self._orig_already_has:
+            self._orig_model = self._orig_model(quantiles=self.quantiles)
 
 
 def _merge_dicts(x, y):
