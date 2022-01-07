@@ -23,5 +23,4 @@ from . import models
 from .statistic import *
 from . import statistics
 
-from .estimator import *
 from . import estimators

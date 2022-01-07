@@ -33,31 +33,31 @@ def test_poisson_upper_limit():
 
     ul = hypney.estimators.UpperLimit(
         stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False
-    )
+    )()
     np.testing.assert_allclose(ul, poisson_ul(0))
 
     ul = hypney.estimators.UpperLimit(
         stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=True
-    )
+    )()
     np.testing.assert_allclose(ul, poisson_ul(0))
 
     # Invalid anchor
     with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(stat, poi="rate", anchors=[-5, 5], cl=0.9)
+        hypney.estimators.UpperLimit(stat, poi="rate", anchors=[-5, 5], cl=0.9)()
 
     # Limit is above last anchor
     with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(stat, poi="rate", anchors=[0, 2], cl=0.9)
+        hypney.estimators.UpperLimit(stat, poi="rate", anchors=[0, 2], cl=0.9)()
 
     # Limit is below first anchor
     with pytest.raises(ValueError):
         hypney.estimators.UpperLimit(
             stat.set(data=np.ones(10)), poi="rate", anchors=[0, 2], cl=0.9
-        )
+        )()
 
     # Test anchors from toy MC process are preserved
     stat2 = stat.set(dist=stat.interpolate_dist_from_toys(anchors=dict(rate=(0, 5))))
-    ul = hypney.estimators.UpperLimit(stat2, poi="rate", cl=0.9)
+    ul = hypney.estimators.UpperLimit(stat2, poi="rate", cl=0.9)()
     assert 0 < ul < 5
 
     # Test case where statistic decreases as parameter increases
@@ -69,13 +69,13 @@ def test_poisson_upper_limit():
     stat3 = hypney.statistics.Count(mneg)
     ul = hypney.estimators.UpperLimit(
         stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1
-    )
+    )()
     assert ul == -poisson_ll(0) == 0
 
     # Now data is not empty, UL finite (and negative)
     ul = hypney.estimators.UpperLimit(
         stat3(data=np.ones(50)), poi="neg_rate", anchors=[-50, -20], cl=0.9, sign=-1
-    )
+    )()
     np.testing.assert_allclose(ul, -poisson_ll(50))
 
 
@@ -85,7 +85,7 @@ def test_poisson_lower_limit():
 
     ll = hypney.estimators.LowerLimit(
         stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False
-    )
+    )()
     np.testing.assert_allclose(ll, poisson_ll(0))
 
     # Test case where statistic decreases as parameter increases
@@ -96,24 +96,26 @@ def test_poisson_lower_limit():
     stat3 = hypney.statistics.Count(mneg)
     ll = hypney.estimators.LowerLimit(
         stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1
-    )
+    )()
     np.testing.assert_allclose(ll, -poisson_ul(0))
 
     ll = hypney.estimators.LowerLimit(
         stat3(data=np.ones(50)), poi="neg_rate", anchors=[-100, -50], cl=0.9, sign=-1
-    )
+    )()
     np.testing.assert_allclose(ll, -poisson_ul(50))
 
 
 def test_poisson_central_interval():
     m = hypney.models.uniform(data=np.array([]))
     stat = hypney.statistics.Count(m)
-    ll, ul = hypney.estimators.CentralInterval(stat, poi="rate", anchors=[0, 5], cl=0.8)
+    ll, ul = hypney.estimators.CentralInterval(
+        stat, poi="rate", anchors=[0, 5], cl=0.8
+    )()
     assert ll == 0
     np.testing.assert_allclose(ul, poisson_ul(0))
 
     ll, ul = hypney.estimators.CentralInterval(
         stat(data=np.zeros(50)), poi="rate", anchors=[10, 50, 90], cl=0.8
-    )
+    )()
     np.testing.assert_allclose(ll, poisson_ll(50))
     np.testing.assert_allclose(ul, poisson_ul(50))

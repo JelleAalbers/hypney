@@ -7,7 +7,7 @@ export, __all__ = hypney.exporter()
 
 
 @export
-class ConfidenceInterval(hypney.Estimator):
+class ConfidenceInterval:
     def __init__(
         self,
         stat,
@@ -16,17 +16,17 @@ class ConfidenceInterval(hypney.Estimator):
         sign=1,
         anchors=None,
         use_cdf=False,
-        *args,
-        **kwargs,
+        ppf_fudge=0,
     ):
-        super().__init__(stat, *args, **kwargs)
+        self.stat = stat
         self.poi = poi
         self.cl = cl
         self.sign = sign
         self.use_cdf = use_cdf
-        self.poi_spec = stat.model.param_spec_for(poi)
+        self.ppf_fudge = ppf_fudge
+        self.poi_spec = self.stat.model.param_spec_for(poi)
 
-        if not stat.dist:
+        if not self.stat.dist:
             raise ValueError(
                 "Statistic has no distribution, cannot set confidence intervals"
             )
@@ -36,7 +36,7 @@ class ConfidenceInterval(hypney.Estimator):
         if not anchors:
             # Get anchors from the distribution
             # (these will e.g. be present if the dist was generated from toys)
-            anchors = stat.dist.param_spec_for(poi).anchors
+            anchors = self.stat.dist.param_spec_for(poi).anchors
         if not anchors:
             # No anchors in dist; try the model instead.
             anchors = self.poi_spec.anchors
@@ -48,56 +48,69 @@ class ConfidenceInterval(hypney.Estimator):
         if not anchors:
             raise ValueError("Provide anchors to initially evaluate poi on")
         anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
-        if not user_gave_anchors and hasattr(stat, "bestfit"):
+        if not user_gave_anchors and hasattr(self.stat, "bestfit"):
             # Add bestfit of POI as an anchor
-            anchors = np.concatenate(anchors, stat.bestfit[poi])
+            anchors = np.concatenate(anchors, self.stat.bestfit[poi])
         self.anchors = np.sort(anchors)
 
-        # Evaluate statistic at anchors
-        # (statistic is vectorized over params)
-        anchor_pars = {self.poi: stat.model._to_tensor(self.anchors).raw}
-        self.stat_at_anchors = self.stat.compute(params=anchor_pars)
-
-    def _compute_side(self, side=+1):
         # +1 for upper limit on statistic that (on large scales)
         # takes higher-percentile values as the POI grows (like count)
-        sign = self.sign * side
+        self.combined_sign = self.sign * self.side
 
-        if sign > 0:
+        if self.combined_sign > 0:
             # Counterintuitive, but see Neyman belt construction diagram.
-            crit_quantile = 1 - self.cl
+            self.crit_quantile = 1 - self.cl
         else:
-            crit_quantile = self.cl
+            self.crit_quantile = self.cl
 
-        # Find critical value (=corresponding to quantile crit_quantile) at anchors.
         if self.use_cdf:
-            # Use CDF to transform statistic to a p-value
-            stat_at_anchors = np.array(
-                [
-                    self.stat.dist.cdf(data=stat_val, params={self.poi: x})
-                    for x, stat_val in zip(self.anchors, self.stat_at_anchors)
-                ]
-            )
+            # We will use the CDF to transform statistics to p-values
+            # Can't do much here, have to wait for data.
+            cdf = stat.dist.cdf
 
             def ppf(params):
-                return crit_quantile
+                return self.crit_quantile + self.ppf_fudge
 
-            cdf = self.stat.dist.cdf
-            crit_at_anchors = np.full_like(stat_at_anchors, crit_quantile)
+            self.crit_at_anchors = np.full(len(self.anchors), self.crit_quantile)
 
         else:
-            # Use ppf to find critical value of statistic, won't need cdf
-            stat_at_anchors = self.stat_at_anchors
+            # We will use the ppf to find critical value of statistic
+            # Won't need the cdf, set it to identity.
+            # Can compute critical value at anchors already here,
+            # (so won't need to repeat it when testing several datasets)
 
             def cdf(data, params):
                 return data
 
-            ppf = self.stat.dist(quantiles=crit_quantile).ppf
-            crit_at_anchors = np.array(
-                [ppf(params={self.poi: x}) for x in self.anchors]
+            dist_ppf = stat.dist(quantiles=self.crit_quantile).ppf
+
+            def ppf(*args, **kwargs):
+                return self.ppf_fudge + dist_ppf(*args, **kwargs)
+
+            # Find critical value (=corresponding to quantile crit_quantile) at anchors.
+            self.crit_at_anchors = ppf(params={self.poi: self.anchors})
+
+        self._cdf = cdf
+        self._ppf = ppf
+
+    def __call__(self, data=hypney.NotChanged):
+        stat = self.stat(data=data)
+
+        # Evaluate statistic at anchors
+        # (statistic is vectorized over params)
+        anchor_pars = {self.poi: stat.model._to_tensor(self.anchors).raw}
+        stat_at_anchors = stat.compute(params=anchor_pars)
+
+        if self.use_cdf:
+            # Use CDF to transform statistic to a p-value
+            stat_at_anchors = np.array(
+                [
+                    stat.dist.cdf(data=stat_val, params={self.poi: x})
+                    for x, stat_val in zip(self.anchors, stat_at_anchors)
+                ]
             )
 
-        crit_minus_stat = crit_at_anchors - stat_at_anchors
+        crit_minus_stat = self.crit_at_anchors - stat_at_anchors
         isnan = np.isnan(crit_minus_stat)
         if np.any(isnan):
             raise ValueError(
@@ -106,13 +119,13 @@ class ConfidenceInterval(hypney.Estimator):
 
         # sign+1 => upper limit is above the highest anchor for which
         # crit - stat <= 0 (i.e. crit too low, so still in interval)
-        still_in = np.where(sign * crit_minus_stat <= 0)[0]
+        still_in = np.where(self.combined_sign * crit_minus_stat <= 0)[0]
         if not len(still_in):
             raise ValueError(
                 f"None of the anchors {self.anchors} are inside the confidence interval"
             )
 
-        if side > 0:
+        if self.side > 0:
             ileft = still_in[-1]
             if ileft == len(self.anchors) - 1:
                 # Highest possible value is still in interval.
@@ -148,8 +161,9 @@ class ConfidenceInterval(hypney.Estimator):
         def objective(x):
             params = {self.poi: x}
             return (
-                ppf(params=params)
-                - cdf(data=self.stat.compute(params=params), params=params)
+                # One of ppf/cdf is trivial here, depending on self.use_cdf
+                self._ppf(params=params)
+                - self._cdf(data=stat.compute(params=params), params=params)
                 + offset
             )
 
@@ -158,18 +172,20 @@ class ConfidenceInterval(hypney.Estimator):
 
 @export
 class UpperLimit(ConfidenceInterval):
-    def _compute(self):
-        return self._compute_side(+1)
+    side = +1
 
 
 @export
 class LowerLimit(ConfidenceInterval):
-    def _compute(self):
-        return self._compute_side(-1)
+    side = -1
 
 
 @export
-class CentralInterval(ConfidenceInterval):
-    def _compute(self):
-        self.cl = 1 - (1 - self.cl) / 2
-        return self._compute_side(-1), self._compute_side(+1)
+class CentralInterval:
+    def __init__(self, *args, cl=0.9, **kwargs):
+        kwargs["cl"] = 1 - (1 - cl) / 2
+        self._lower = LowerLimit(*args, **kwargs)
+        self._upper = UpperLimit(*args, **kwargs)
+
+    def __call__(self, data=hypney.NotChanged):
+        return self._lower(data), self._upper(data)
