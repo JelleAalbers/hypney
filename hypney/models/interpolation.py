@@ -22,6 +22,10 @@ class Interpolation(hypney.Model):
     other_methods_to_interpolate = "rate mean std".split()
     anchor_models: ty.Dict[tuple, hypney.Model]
 
+    @property
+    def interpolated_params(self):
+        return [p for p in self.param_specs if p.anchors]
+
     def __init__(
         self,
         # Called with params (dict of scalars), outputs model
@@ -51,9 +55,9 @@ class Interpolation(hypney.Model):
                 ]
             )
 
-        self.interpolated_params = [p for p in param_specs if p.anchors]
-        param_names = [p.name for p in self.interpolated_params]
-        anchor_values = [p.anchors for p in self.interpolated_params]
+        interpolated_params = [p for p in param_specs if p.anchors]
+        param_names = [p.name for p in interpolated_params]
+        anchor_values = [p.anchors for p in interpolated_params]
 
         # List of all possible anchor vals (long 1d list of parameter tuples)
         anchor_grid = list(itertools.product(*anchor_values))
