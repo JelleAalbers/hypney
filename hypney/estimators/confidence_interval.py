@@ -34,7 +34,7 @@ class ConfidenceInterval:
         # Collect anchors
         user_gave_anchors = bool(anchors)
         if not anchors:
-            # Get anchors from the distribution
+            # Get anchors from the (reparametrized) distribution
             # (these will e.g. be present if the dist was generated from toys)
             anchors = self.stat.dist.param_spec_for(poi).anchors
         if not anchors:

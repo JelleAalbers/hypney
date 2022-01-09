@@ -13,13 +13,21 @@ def test_dist():
 
 def test_dist_from_toys():
     """Test building distributions by toy MC"""
-    m = hypney.models.norm(rate=10)
-    count = hypney.statistics.Count(m)
+    # cannot test this with count, its dist params collapses to mu
+    # which makes no sense for a histogram
+    # (we could build a toy MC distribution for Count using
+    # interpolate_dist_from_toys)
+    class Count2(hypney.statistics.Count):
+        def _dist_params(self, params):
+            return params
 
-    dist = count.dist_from_toys(n_toys=2000)
+    m = hypney.models.norm(rate=10)
+    count = Count2(m)
+
+    dist = count.dist_from_toys(n_toys=2000, options=dict(mass_bins=False))
     assert (dist.mean() - 10) / 10 < 0.1
 
-    dist = count.dist_from_toys(rate=20, n_toys=2000)
+    dist = count.dist_from_toys(rate=20, n_toys=2000, options=dict(mass_bins=False))
     assert (dist.mean() - 20) / 20 < 0.1
 
     # Setting this distribution just adds some dummy params

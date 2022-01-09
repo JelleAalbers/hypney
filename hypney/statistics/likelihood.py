@@ -22,7 +22,6 @@ class LikelihoodRatio(hypney.Statistic):
         if max_est is None:
             max_est = hypney.estimators.MaximumAndValue
         self.max_est = max_est
-
         super().__init__(model=model, *args, **kwargs)
 
     def _init_data(self):
@@ -33,8 +32,17 @@ class LikelihoodRatio(hypney.Statistic):
     def _compute(self, params):
         return -2 * (self.ll._compute(params=params) - self.ll_bestfit)
 
+    def _constant_dist(self, dist):
+        # Return a constant/frozen distribution from dist
+        # that takes, but ignores, the model parameters
+        return dist.freeze().reparametrize(
+            _to_empty_params, param_specs=self.model.param_specs
+        )
+
     def _build_dist(self):
-        return hypney.models.chi2(df=len(self.model.param_names)).freeze()
+        return self._constant_dist(
+            hypney.models.chi2(df=len(self.model.param_names)).freeze()
+        )
 
 
 @export
@@ -67,7 +75,7 @@ class PLR(LikelihoodRatio):
         return -2 * (self.ll_conditional_fit - self.ll_bestfit)
 
     def _build_dist(self):
-        return hypney.models.chi2(df=len(self.poi)).freeze()
+        return self._constant_dist(hypney.models.chi2(df=len(self.poi)))
 
 
 @export
@@ -85,9 +93,9 @@ class PLROrZero(PLR):
         return result
 
     def _build_dist(self):
-        return (
+        return self._constant_dist(
             hypney.models.DiracDelta(rate=0.5) + hypney.models.chi2(df=1, rate=0.5)
-        ).freeze()
+        )
 
 
 @export
@@ -104,4 +112,8 @@ class SignedPLR(PLR):
     def _build_dist(self):
         half_chi2 = hypney.models.chi2(df=1, rate=0.5)
         dist = half_chi2 + half_chi2.scale(-1)
-        return dist.freeze()
+        return self._constant_dist(dist)
+
+
+def _to_empty_params(params):
+    return dict()

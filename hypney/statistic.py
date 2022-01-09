@@ -14,7 +14,13 @@ export, __all__ = hypney.exporter()
 @export
 class Statistic:
     model: hypney.Model  # Model of the data
-    dist: hypney.Model = None  # Model of the statistic; takes same parameters
+    _dist: hypney.Model = None  # Model of the statistic; takes same parameters
+
+    @property
+    def dist(self):
+        # Just so people won't assign it by accident...
+        # pass dist=... in __init__ instead.
+        return self._dist
 
     ##
     # Initialization
@@ -40,39 +46,26 @@ class Statistic:
     def _set_dist(self, dist: hypney.Model):
         if dist is NotChanged:
             return
-
         if dist is None:
             if hasattr(self, "_build_dist"):
-                # Build a distribution automatically
+                # Statistic has a default distribution
                 dist = self._build_dist()
-                transform_params = self._dist_params
-        else:
-            # Use the user's distribution, but make it take all the model's params,
-            # ignoring params the dist does not depend on.
-            transform_params = functools.partial(
-                _filter_params, allowed_names=dist.param_names
+            else:
+                # Leave self.dist at None (some estimators will complain)
+                assert self._dist is None
+                return
+
+        if self._has_redefined("_dist_params"):
+            # For some statistics (e.g. count), distributions take different
+            # parameters than the model, specified by _dist_params.
+            # Thus, wrap dist in an appropriate reparametrization.
+            # Unfortunately, there is no easy way to preserve any anchors...
+            dist = dist.reparametrize(
+                transform_params=self._dist_params, param_specs=self.model.param_specs,
             )
 
-        if dist is not None:
-            # Make the dist take the same parameters as the model,
-            # even if it depends on fewer / different parameters.
-            param_specs = []
-            for p in self.model.param_specs:
-                # Set anchors from dist if available, copy the rest of the param
-                # spec -- especially defaults! -- from model
-                new_spec = p
-                if p.name in dist.param_names:
-                    dist_spec = dist.param_spec_for(p.name)
-                    if dist_spec.anchors and not p.anchors:
-                        new_spec = p._replace(anchors=dist_spec.anchors)
-                param_specs.append(new_spec)
-
-            self.dist = dist.reparametrize(
-                transform_params=transform_params, param_specs=param_specs,
-            )
-
-        # if dist is None and we can't build_dist, leave dist None;
-        # some estimators will complain.
+        # Ensure dist has same defaults as models
+        self._dist = dist(params=self.model.defaults)
 
     def _set_data(self, data):
         if data is NotChanged:
@@ -106,6 +99,15 @@ class Statistic:
         new_self._set_dist(dist)
         new_self._set_data(data)
         return new_self
+
+    def _has_redefined(self, method_name, from_base=None):
+        """Returns if method_name is redefined from Statistic.method_name"""
+        if from_base is None:
+            from_base = Statistic
+        f = getattr(self, method_name)
+        if not hasattr(f, "__func__"):
+            return True
+        return f.__func__ is not getattr(from_base, method_name)
 
     ##
     # Computation
@@ -162,8 +164,7 @@ class Statistic:
 
     def _dist_params(self, params):
         """Return distribution params given model params"""
-        # Default assumption is that distribution is parameter-free
-        return dict()
+        return params
 
     def dist_from_toys(
         self,
@@ -182,29 +183,64 @@ class Statistic:
         # Use a *lot* of bins by default, since we're most interested
         # in the cdf/ppf
         options.setdefault("bin_count_multiplier", 10)
+        options.setdefault("mass_bins", True)
 
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
         self = self.set(params=params, **kwargs)
         toys = self.rvs(n_toys, transform=transform)
 
         dist = hypney.models.from_samples(toys, **options)
-        # Remove standard loc/scale/rate params
-        # to avoid confusion with model parameters
+        # Remove all parameters (to avoid confusion with model parameters)
         return dist.freeze()
 
     def interpolate_dist_from_toys(
         self, anchors: dict, progress=True, methods="ppf", map=map, **kwargs
     ):
+        """Estimate this statistic's distribution by Monte Carlo.
+
+        This draws toys at a grid specified by the anchors.
+        By default, we then interpolate the ppf, since this is what you need
+        for confidence interval setting.
+        """
         assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
+
+        if self._has_redefined("_dist_params"):
+            # Build a distribution that takes the _dist_params
+            # rather than the model's params.
+
+            # Compute new anchors using self._dist_params
+            if len(anchors) > 1:
+                raise NotImplementedError(
+                    "Multi-parameter interpolation not supported if _dist_params is nontrivial"
+                )
+                # (Since we'd have to transform the whole grid of anchors.
+                #  Even if the transformation is simple enough to allow this,
+                #  we don't have that grid here yet)
+            dist_anchors = self._dist_params(anchors)
+
+            # Set up transformation dictionary
+            # from old (model) to new (dist) anchors
+            dist_pname = list(dist_anchors.keys())[0]
+            model_pname = list(anchors.keys())[0]
+
+            model_to_dist_anchor = dict(
+                zip(anchors[model_pname], dist_anchors[dist_pname])
+            )
+
+            # The interpolator will work in the new (dist) anchors
+            # Thus model_builder must transform back to the old (model) anchors
+            def model_builder(dist_params):
+                model_params = {
+                    model_pname: model_to_dist_anchor[dist_params[dist_pname]]
+                }
+                return self.dist_from_toys(params=model_params, **kwargs)
+
+            anchors = dist_anchors
+
+        else:
+            model_builder = functools.partial(self.dist_from_toys, **kwargs)
+            anchors = anchors
+
         return hypney.models.Interpolation(
-            functools.partial(self.dist_from_toys, **kwargs),
-            anchors,
-            progress=progress,
-            map=map,
-            methods=methods,
-        )
-
-
-def _filter_params(params, allowed_names):
-    # just because pickle doesn't like lambdas...
-    return {name: params[name] for name in allowed_names}
+            model_builder, anchors, progress=progress, map=map, methods=methods,
+        ).fix_except(anchors.keys())
