@@ -17,6 +17,7 @@ export, __all__ = hypney.exporter()
 class DeficitHawk(hypney.Statistic):
 
     cuts: np.ndarray
+    _cached_acceptance = itertools.repeat(None)
 
     def __init__(self, *args, signal_only=False, **kwargs):
         self.signal_only = signal_only
@@ -34,11 +35,13 @@ class DeficitHawk(hypney.Statistic):
     def _compute(self, params):
         # Check for vectorization, undo any (1,) batch shape nonsense
         batch_shape = self.model._batch_shape(params)
-        assert prod(batch_shape) == 1, "DeficitHawk is not yet vectorized"
+        assert (
+            prod(batch_shape) == 1
+        ), f"DeficitHawk is not yet vectorized, can't handle batch shape {batch_shape}"
         params = {k: v.reshape((),) for k, v in params.items()}
 
         scores = self._score_cuts(params)
-        result = ep.min(ep.stack(scores), axis=0)
+        result = ep.min(ep.stack(scores, axis=0), axis=-1)
 
         # Restore any desired (1,) batch shapes... may it do you fine
         return result.reshape(batch_shape)
@@ -46,7 +49,8 @@ class DeficitHawk(hypney.Statistic):
     def best_cut(self, params=None, **kwargs):
         """Return dict with information about the best cut/region"""
         params = self.model.validate_params(params, **kwargs)
-        best_i = self.model.backend.argmin(self._score_cuts(params))
+        # TODO: this will probably crash.. batch shape nonsense
+        best_i = self.model.backend.argmin(self._score_cuts(params), axis=0)
         return self._cut_info(best_i)
 
     def _init_cuts(self):
@@ -75,14 +79,6 @@ class SimpleHawk(DeficitHawk):
 
     _observed: np.ndarray = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        if self.signal_only and self._cached_acceptance is None:
-            # Cut efficiencies are constant (wrt params and data)
-            self._acceptance = self._get_cached_acceptance
-            self._cached_acceptance = self._acceptance()
-
     def _init_cut_stats(self):
         """Compute _observed here if not already done earlier"""
         pass
@@ -102,7 +98,7 @@ class SimpleHawk(DeficitHawk):
         """Compute fraction of expected signal passing each cut"""
         raise NotImplementedError
 
-    def _get_cached_acceptance(self, params):
+    def _get_cached_acceptance(self, params=None):
         return self._cached_acceptance
 
 
@@ -113,9 +109,6 @@ class FullHawk(DeficitHawk):
     statistic_class: hypney.Statistic
 
     cut_stats: ty.List[hypney.models.CutModel]
-
-    # FixedRegionFullHawk will fill this if signal_only=True
-    _cached_acceptance = itertools.repeat(None)
 
     def _init_cut_stats(self):
         """Initialize a statistic for each cut"""
@@ -150,23 +143,29 @@ class FullHawk(DeficitHawk):
 @export
 class FixedRegionSimpleHawk(SimpleHawk):
     def __init__(self, *args, cuts, **kwargs):
-        cuts = np.asarray(cuts)
-        super().__init__(*args, cuts=cuts, **kwargs)
-        # SimpleHawk.__init__ already caches acceptances if signal_only
+        self.cuts = np.asarray(cuts)
+        super().__init__(*args, **kwargs)
+        if self.signal_only and self._acceptance != self._get_cached_acceptance:
+            # Cut efficiencies are constant (wrt params and data)
+            # and because cuts are fixed, we can compute them now
+            # (even if we don't yet have data)
+            self._cached_acceptance = self._acceptance()
+            self._acceptance = self._get_cached_acceptance
 
     def _init_cut_stats(self):
         # O(n log n)
-        data = np.sort(self.data)
+        data = np.sort(self.data[:, 0])
         # Use two binary searches to count events in each cut
         # O(ncuts * log n)
+        # TODO: implement cut types / openness.
         self._observed = (
-            np.searchsorted(data, self.cuts[:, 1]),
-            -np.searchsorted(data, self.cuts[:, 0]),
+            np.searchsorted(data, self.cuts[:, 1])
+            - np.searchsorted(data, self.cuts[:, 0]),
         )
         # Naive counting would be O(ncuts * n),
         # assuming ncuts > O(log n), the above is faster.
 
-    def _acceptance(self, params):
+    def _acceptance(self, params=None):
         return self.model.cdf(data=self.cuts[:, 1], params=params) - self.model.cdf(
             data=self.cuts[:, 0], params=params
         )
@@ -178,15 +177,18 @@ class FixedRegionFullHawk(FullHawk):
         self.cuts = np.asarray(cuts)
         super().__init__(*args, **kwargs)
 
+    def _init_cut_stats(self):
+        super()._init_cut_stats()
+
         if self.signal_only and not isinstance(self._cached_effs, list):
             # Cut efficiencies are constant (wrt params and data).
             # FullHawk._init_cut_stats uses these efficiencies.
             # (unlike SimpleHawk, they are not directly used in statistic
             #  computations, but they are still worth caching)
-            self._init_cut_stats()
             self._cached_acceptance = np.asarray(
                 [stat.model.cut_efficiency() for stat in self.cut_stats]
             )
+            self._acceptance = self._get_cached_acceptance
 
 
 @export
@@ -260,10 +262,7 @@ class AllRegionHawk:
         elif side_constraint == "both":
             # left and right-constrainted intervals
             return np.concatenate(
-                [
-                    self._build_cut_indices(n_points, "left"),
-                    self._build_cut_indices(n_points, "right"),
-                ]
+                [self._build_cut_indices("left"), self._build_cut_indices("right"),]
             )
         raise ValueError(f"Unknown side constraint {side_constraint}")
 
@@ -296,6 +295,42 @@ class AllRegionSimpleHawk(AllRegionHawk, SimpleHawk):
     pass
 
 
+##
+# P(observing fewer events)
+##
+
+
+@export
+class PNHawk:
+    def _dist_params(self, params):
+        # Distribution depends only on # expected events
+        return dict(mu=self.model._rate(params))
+
+    def _compute_scores(self, n, mu, frac):
+        return self.model._to_tensor(
+            stats.poisson.cdf(n, mu=hypney.utils.eagerpy.ensure_numpy(mu))
+        )
+
+
+@export
+class PNAllRegionHawk(PNHawk, AllRegionSimpleHawk):
+    pass
+
+
+@export
+class PNFixedRegionHawk(PNHawk, FixedRegionSimpleHawk):
+    pass
+
+
+# @export
+# class YellinP(PNAllRegionHawk):
+#     # Alias
+#     pass
+
+
+# Alternate implementation via Full hawk. Should be much slower!
+
+
 @export
 class PNOneCut(hypney.Statistic):
     """Return Poisson P of observing <= the observed N events
@@ -304,10 +339,6 @@ class PNOneCut(hypney.Statistic):
     (We want something that yields LOW value for deficits instead,
      since we take the minimum over cuts/regions.)
     """
-
-    def _dist_params(self, params):
-        # Distribution depends only on # expected events in the region
-        return dict(mu=self.model._rate(params))
 
     def _compute(self, params):
         mu = self.model._rate(params)
@@ -321,28 +352,7 @@ class PNOneCut(hypney.Statistic):
 
 
 @export
-class PNOneCutAugmented(PNOneCut):
-    _augment = 0
-
-    def _init_data(self):
-        self._augment = float(np.random.rand())
-        return super()._init_data()
-
-    def _compute(self, params):
-        mu = self.model._rate(params)
-        n = len(self.data)
-        if self.model._backend_name == "numpy":
-            # Shortcut, avoids some overhead... :-(
-            # TODO: test if still faster with augment
-            q = stats.poisson.cdf(n, mu=mu.raw)
-            q += self._augment * stats.poisson.pmf(n + 1, mu=mu.raw)
-            return self.model._to_tensor(q)
-        poisson_model = hypney.models.poisson(mu=mu)
-        return poisson_model.cdf(n) + self._augment * poisson_model.pdf(n + 1)
-
-
-@export
-class PNFullHawk(AllRegionFullHawk):
+class PNFixedRegionHawkSlow(FixedRegionFullHawk):
 
     statistic_class = PNOneCut
 
@@ -352,27 +362,18 @@ class PNFullHawk(AllRegionFullHawk):
 
 
 @export
-class PNSimpleHawk(AllRegionSimpleHawk):
+class PNAllRegionHawkSlow(AllRegionFullHawk):
+
+    statistic_class = PNOneCut
+
     def _dist_params(self, params):
-        # Distribution depends only on # expected events
+        # Distribution depends only on # expected events in the region
         return dict(mu=self.model._rate(params))
 
-    def _compute_scores(self, n, mu, frac):
-        return self.model._to_tensor(
-            stats.poisson.cdf(n, mu=hypney.utils.eagerpy.ensure_numpy(mu))
-        )
 
-
-@export
-class PNHawk(PNSimpleHawk):
-    # Alias
-    pass
-
-
-@export
-class YellinP(PNHawk):
-    # Alias
-    pass
+##
+# Optimum interval
+##
 
 
 @export

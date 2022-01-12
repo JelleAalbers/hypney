@@ -9,13 +9,18 @@ def test_pn_simple():
     model = hp.uniform(rate=40).fix_except("rate")
     toy_data = model.simulate()
     assert (
-        hp.PNSimpleHawk(model, data=toy_data).compute()
-        == hp.PNFullHawk(model, data=toy_data).compute()
+        hp.PNAllRegionHawk(model, data=toy_data).compute()
+        == hp.PNAllRegionHawkSlow(model, data=toy_data).compute()
     )
 
+    cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
+    fast_stat = hp.PNFixedRegionHawk(model, cuts=cuts, data=toy_data)
+    slow_stat = hp.PNFixedRegionHawkSlow(model, cuts=cuts, data=toy_data)
+    assert fast_stat.compute() == slow_stat.compute()
 
-def test_yellin_p():
-    """Test the Yellin pmax/pmin method"""
+
+def test_pn():
+    """Test the PN all region hawk (equivalent to Yellin's pmax/pmin method)"""
     for mu_true in [0, 2, 4]:
 
         model_simple = hp.uniform(rate=mu_true).fix_except("rate")
@@ -28,7 +33,7 @@ def test_yellin_p():
         for m, signal_only in [(model_simple, True), (model_withbg, False)]:
 
             d = m.simulate()
-            stat = hp.YellinP(model=m, signal_only=signal_only, data=d)
+            stat = hp.PNAllRegionHawk(model=m, signal_only=signal_only, data=d)
 
             for mu_test in [0, 2, 25]:
 
@@ -61,3 +66,21 @@ def test_yellin_p():
                         assert poisson_p >= pmin_obs, "pmin missed smaller p"
                         min_seen = min(poisson_p, min_seen)
                 assert min_seen == pmin_obs, "pmin found too small p'"
+
+
+# def test_pn_vectorization():
+#     model = hp.uniform(rate=40).fix_except("rate")
+#     toy_data = model.simulate()
+
+#     rates = np.array([0, 2, 5, 7.2])
+
+#     stat = hp.PNAllRegionHawk(model, data=toy_data)
+#     np.testing.assert_array_equal(
+#         stat.compute(rate=rates),
+#         np.array([stat.compute(rate=r) for r in rates ]))
+
+#     cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
+#     stat = hp.PNFixedRegionHawk(model, cuts=cuts, data=toy_data)
+#     np.testing.assert_array_equal(
+#         stat.compute(rate=rates),
+#         np.array([stat.compute(rate=r) for r in rates ]))

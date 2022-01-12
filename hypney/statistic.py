@@ -223,8 +223,12 @@ class Statistic:
                 )
                 # (Since we'd have to transform the whole grid of anchors.
                 #  Even if the transformation is simple enough to allow this,
-                #  we don't have that grid here yet)
-            dist_anchors = self._dist_params(anchors)
+                #  we don't have that grid here yet
+            # (back and forth to tensor necessary to support dist_params that
+            #  do calls -- e.g. Count's dist calls to model._rate)
+            param_tensors = {k: self.model._to_tensor(v) for k, v in anchors.items()}
+            dist_anchors = self._dist_params(param_tensors)
+            dist_anchors = {k: v.numpy().tolist() for k, v in dist_anchors.items()}
 
             # Set up transformation dictionary
             # from old (model) to new (dist) anchors
@@ -232,7 +236,7 @@ class Statistic:
             model_pname = list(anchors.keys())[0]
 
             model_to_dist_anchor = dict(
-                zip(anchors[model_pname], dist_anchors[dist_pname])
+                zip(tuple(anchors[model_pname]), dist_anchors[dist_pname])
             )
 
             # The interpolator will work in the new (dist) anchors
