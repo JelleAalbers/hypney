@@ -94,12 +94,15 @@ def np64(x):
 
 
 @export
-def average_axis0(x, weights):
+def average(x, weights, axis=0):
     weights = astensor(weights, match_type=x)
-    # Add as many ones to shape as we need
-    while len(weights.shape) < len(x.shape):
-        weights = weights[..., None]
-    return ep.sum(x * weights, axis=0) / ep.sum(weights, axis=0)
+    if len(weights.shape) != len(x.shape):
+        assert len(weights.shape) == 1
+        # Add ones on all axes except the one to average over
+        w_shape = [1] * len(x.shape)
+        w_shape[axis] = -1
+        weights = weights.reshape(w_shape)
+    return ep.sum(x * weights, axis=axis) / ep.sum(weights, axis=axis)
 
 
 @export

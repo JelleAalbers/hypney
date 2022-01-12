@@ -97,19 +97,25 @@ class Mixture(AssociativeCombination):
     # TODO: logpdf
 
     def _pdf(self, params: dict) -> ep.TensorType:
-        return hypney.utils.eagerpy.average_axis0(
-            self.stack_axis0(
-                [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
-            ),
+        # (n_models, {batch_shape}, n_events)
+        # _pdf eats expanded batch shape
+        pdf_per_model = self.stack_axis0(
+            [m._pdf(params=ps) for m, ps in self._iter_models_params(params)],
+        )
+        return hypney.utils.eagerpy.average(
+            pdf_per_model,
+            # _f_per_model is (n_models, {expanded batch_shape})
             self._f_per_model(params),
+            axis=0,
         )
 
     def _cdf(self, params: dict) -> ep.TensorType:
-        return hypney.utils.eagerpy.average_axis0(
-            self.stack_axis0(
-                [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
-            ),
-            weights=self._f_per_model(params),
+        # (n_models, {batch_shape}, n_events)
+        cdf_per_model = self.stack_axis0(
+            [m._cdf(params=ps) for m, ps in self._iter_models_params(params)],
+        )
+        return hypney.utils.eagerpy.average(
+            cdf_per_model, weights=self._f_per_model(params), axis=0
         )
 
     def _diff_rate(self, params: dict) -> ep.TensorType:
@@ -128,22 +134,19 @@ class Mixture(AssociativeCombination):
     ##
 
     def _rate(self, params: dict) -> ep.TensorType:
-        return sum(self._rate_per_model(params))
+        return ep.sum(self._rate_per_model(params), axis=0)
 
     def _mean(self, params: dict) -> ep.TensorType:
         # Average of the means
         means = self._mean_per_model(params)
-        return sum([x * w for x, w in zip(means, self._f_per_model(params))])
+        return ep.sum(means * self._f_per_model(params), axis=0)
 
     def _std(self, params: dict) -> ep.TensorType:
         means = self._mean_per_model(params)
         s2s = self._var_per_model(params)
         ps = self._f_per_model(params)
         # See e.g. https://stats.stackexchange.com/a/16609
-        var = (
-            sum([p * (s2 + m ** 2) for p, m, s2 in zip(ps, means, s2s)])
-            - sum([p * m for p, m in zip(ps, means)]) ** 2
-        )
+        var = ep.sum(ps * (s2s + means ** 2), axis=0) - ep.sum(ps * means, axis=0) ** 2
         return var ** 0.5
 
     ##
@@ -151,6 +154,8 @@ class Mixture(AssociativeCombination):
     ##
 
     def _rate_per_model(self, params: dict) -> ep.TensorType:
+        # This will give (n_models, {expanded_batch_shape}) because params
+        # should be in expanded batch shape.
         return self.stack_axis0(
             [m._rate(ps) for m, ps in self._iter_models_params(params)]
         )
@@ -166,8 +171,9 @@ class Mixture(AssociativeCombination):
         )
 
     def _f_per_model(self, params):
+        # (n_models, {expanded_batch_shape})
         mus = self._rate_per_model(params)
-        return mus / mus.sum()
+        return mus / mus.sum(axis=0)
 
     def stack_axis0(self, xs):
         """Stack list of results from low-level methods along axis=0

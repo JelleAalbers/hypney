@@ -144,7 +144,7 @@ class CutModel(hypney.WrappedModel):
         ]
 
     def _corners_cdf(self, params: dict):
-        """Return CDF at the self._corner_points()"""
+        """Return ({batch_shape}, n_corners)) of CDF at the self._corner_points()"""
         # Avoid calling high-level CDF here, would cause double parameter expansion
         return self._orig_model(data=self._corner_points())._cdf(params=params)
 
@@ -165,12 +165,16 @@ class CutModel(hypney.WrappedModel):
         # + in upper right.
         # TODO: Not sure this is correct for n > 2!
         # (for n=3 looks OK, for higher n I can't draw/visualize)
+
         if corners_cdf is None:
             corners_cdf = self._corners_cdf(params)
-        result = ([math.prod(signs) for signs in self._signs()] * corners_cdf).sum(
-            axis=-1
-        )
-        assert result.max() <= 1
+        # Get the sign for each corner; reshape to ({batch_shape}, n_corners)
+        corner_signs = self._to_tensor([math.prod(signs) for signs in self._signs()])
+        for _ in range(len(self._batch_shape(params))):
+            corner_signs = corner_signs[None, :]
+        # Compute efficiency:
+        result = (corner_signs * corners_cdf).sum(axis=-1)
+        # assert result.max() <= 1
         return result
 
     def apply_cut(self, data=hypney.NotChanged):

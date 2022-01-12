@@ -375,9 +375,12 @@ class Model:
         if spurious:
             raise ValueError(f"Unknown parameters {spurious} passed")
 
-        # Convert all params to tensors
+        # Convert all params to tensors and broadcast them to a single shape
         params = {pname: self._to_tensor(x) for pname, x in params.items()}
+        return self._to_common_shape(params)
 
+    def _to_common_shape(self, params):
+        """Return params reshaped to a common batch shape"""
         # Find a common batch shape.
         # Walk through shapes from right to left, taking max() of dimsizes,
         # and taking 1 for missing entries.
@@ -388,14 +391,14 @@ class Model:
             )
         )
         # Cast all param tensors to the common batch shape
-        params = {k: ep_util.broadcast_to(v, batch_shape) for k, v in params.items()}
-        return params
+        return {k: ep_util.broadcast_to(v, batch_shape) for k, v in params.items()}
 
-    def _batch_shape(self, params):
+    @staticmethod
+    def _batch_shape(params):
         if not len(params):
             return tuple()
         else:
-            return params[self.param_names[0]].shape
+            return next(iter(params.values())).shape
 
     def _expand_params(self, params):
         """"Return params expanded to (batch_shape, 1)
@@ -520,8 +523,10 @@ class Model:
 
         expanded_params = self._expand_params(params)
 
-        # returns (batch_shape, 1)
+        # returns (batch_shape, n_events/n_quantiles)
+        # i.e. expanded dim is contracted over (unlike scalar_method)
         result = getattr(self, "_" + name)(expanded_params)
+        assert result.shape[:-1] == self._batch_shape(params)
 
         if getattr(self, f"_{_input_name}_is_single_scalar"):
             if self._batch_shape(params):
@@ -603,8 +608,10 @@ class Model:
         # / be used together with tensor methods that do.
         expanded_params = self._expand_params(params)
 
-        # should return (batch_shape, 1)
+        # should return (batch_shape, 1), i.e. expanded dimension is
+        # left alone (unlike _tensor_method)
         result = method(expanded_params)
+        assert result.shape == self._batch_shape(expanded_params)
 
         # ... or a scalar, in case the method didn't use params at all
         # if so, broadcast result as a tensor

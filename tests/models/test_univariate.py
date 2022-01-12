@@ -158,6 +158,13 @@ def test_vectorization():
         m.diff_rate(rate=rates), np.stack([m.diff_rate(rate=x) for x in rates])
     )
 
+    # Batch size [1,1]
+    rates = [[1]]
+    m = m(data=data)
+    np.testing.assert_equal(m.rate(rate=rates), [[m.rate(rate=1)]])
+    np.testing.assert_equal(m.diff_rate(rate=rates), [[m.diff_rate(rate=1)]])
+    assert m.diff_rate(rate=rates).shape == (1, 1, len(data))
+
     # Param matrix
     rates = [0, 1, 2]
     locs = [0, 1, 3, 2]

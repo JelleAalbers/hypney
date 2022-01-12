@@ -1,3 +1,7 @@
+from math import prod
+from functools import wraps
+from types import MethodType
+
 import hypney
 
 export, __all__ = hypney.exporter()
@@ -24,6 +28,7 @@ class Reparametrized(hypney.WrappedModel):
         super().__init__(*args, **kwargs)
 
     # Simulation
+    # these are not vectorized, no need to restore batch shape.
 
     def _simulate(self, params):
         return self._orig_model._simulate(self._transform_params(params))
@@ -31,27 +36,48 @@ class Reparametrized(hypney.WrappedModel):
     def _rvs(self, size: int, params: dict):
         return self._orig_model._rvs(size=size, params=self._transform_params(params))
 
-    # Methods using data
 
-    def _logpdf(self, params):
-        return self._orig_model._logpdf(self._transform_params(params))
+def _wrapped_method(method_name):
+    @wraps(method_name)
+    def wrapped(self, params):
+        # Just to avoid confusion
+        old_params = params
+        del params
 
-    def _pdf(self, params):
-        return self._orig_model._pdf(self._transform_params(params))
+        method = getattr(self._orig_model, method_name)
 
-    def _cdf(self, params):
-        return self._orig_model._cdf(self._transform_params(params))
+        # Get new parameters in common shape
+        new_params = self._transform_params(old_params)
+        new_params = self._to_common_shape(new_params)
 
-    def _ppf(self, params):
-        return self._orig_model._ppf(self._transform_params(params))
+        result = method(new_params)
 
-    # Methods not using data
+        # Enforce the old params' batch shape on the result
+        new_batch_shape = self._batch_shape(new_params)
+        old_batch_shape = self._batch_shape(old_params)
+        if new_batch_shape == old_batch_shape:
+            # Already good, usual case
+            pass
+        elif not new_batch_shape or [x == 1 for x in new_batch_shape]:
+            # This happens if transform fills in scalar-ish defaults
 
-    def _rate(self, params):
-        return self._orig_model._rate(self._transform_params(params))
+            # Remove 1s from new batch axes
+            for _ in len(new_batch_shape):
+                result = result[0]
+            base_shape = result.shape
 
-    def _mean(self, params):
-        return self._orig_model._mean(self._transform_params(params))
+            # Repeat along old batch axes
+            result = result.tile(prod(old_batch_shape))
+            result.reshape(list(old_batch_shape) + list(base_shape))
+        else:
+            raise NotImplementedError(
+                f"Don't know how to impose old batch shape {old_batch_shape} "
+                f"on result with new batch shape {old_batch_shape}"
+            )
+        return result
 
-    def _std(self, params: dict):
-        return self._orig_model._std(self._transform_params(params))
+    return wrapped
+
+
+for method_name in "_logpdf _pdf _cdf _ppf _mean _rate _std".split():
+    setattr(Reparametrized, method_name, _wrapped_method(method_name))
