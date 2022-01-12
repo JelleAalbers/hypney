@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 from scipy import optimize
 
@@ -33,19 +34,20 @@ class ConfidenceInterval:
 
         # Collect anchors
         user_gave_anchors = bool(anchors)
-        if not anchors:
+        # (conditions are wordy since np.array has no truth value
+        if anchors is None or not len(anchors):
             # Get anchors from the (reparametrized) distribution
-            # (these will e.g. be present if the dist was generated from toys)
+            # (these may e.g. be present if the dist was generated from toys)
             anchors = self.stat.dist.param_spec_for(poi).anchors
-        if not anchors:
+        if anchors is None or not len(anchors):
             # No anchors in dist; try the model instead.
             anchors = self.poi_spec.anchors
-        if not anchors:
+        if anchors is None or not len(anchors):
             # If bounds on param are finite, use them as anchors
             bounds = np.array([self.poi_spec.min, self.poi_spec.max])
             if np.all(np.isfinite(bounds)):
                 anchors = bounds
-        if not anchors:
+        if anchors is None or not len(anchors):
             raise ValueError("Provide anchors to initially evaluate poi on")
         anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
         if not user_gave_anchors and hasattr(self.stat, "bestfit"):
@@ -66,11 +68,8 @@ class ConfidenceInterval:
         if self.use_cdf:
             # We will use the CDF to transform statistics to p-values
             # Can't do much here, have to wait for data.
-            cdf = stat.dist.cdf
-
-            def ppf(params):
-                return self.crit_quantile + self.ppf_fudge
-
+            self._cdf = stat.dist.cdf
+            self._ppf_pre_fudge = self._trivial_ppf
             self.crit_at_anchors = np.full(len(self.anchors), self.crit_quantile)
 
         else:
@@ -78,20 +77,19 @@ class ConfidenceInterval:
             # Won't need the cdf, set it to identity.
             # Can compute critical value at anchors already here,
             # (so won't need to repeat it when testing several datasets)
-
-            def cdf(data, params):
-                return data
-
-            dist_ppf = stat.dist(quantiles=self.crit_quantile).ppf
-
-            def ppf(*args, **kwargs):
-                return self.ppf_fudge + dist_ppf(*args, **kwargs)
-
+            self._cdf = self._trivial_cdf
+            self._ppf_pre_fudge = stat.dist(quantiles=self.crit_quantile).ppf
             # Find critical value (=corresponding to quantile crit_quantile) at anchors.
-            self.crit_at_anchors = ppf(params={self.poi: self.anchors})
+            self.crit_at_anchors = self._ppf(params={self.poi: self.anchors})
 
-        self._cdf = cdf
-        self._ppf = ppf
+    def _ppf(self, *args, **kwargs):
+        return self.ppf_fudge + self._ppf_pre_fudge(*args, **kwargs)
+
+    def _trivial_cdf(self, data, params):
+        return data
+
+    def _trivial_ppf(self, params):
+        return self.crit_quantile + self.ppf_fudge
 
     def __call__(self, data=hypney.NotChanged):
         stat = self.stat(data=data)
@@ -158,16 +156,20 @@ class ConfidenceInterval:
         # Don't ask about the sign. All four side/sign combinations are tested...
         offset = self.sign * 1e-9 * (crit_minus_stat[ileft] - crit_minus_stat[iright])
 
-        def objective(x):
-            params = {self.poi: x}
-            return (
-                # One of ppf/cdf is trivial here, depending on self.use_cdf
-                self._ppf(params=params)
-                - self._cdf(data=stat.compute(params=params), params=params)
-                + offset
-            )
+        return optimize.brentq(
+            partial(self._objective, stat=stat, offset=offset),
+            self.anchors[ileft],
+            self.anchors[iright],
+        )
 
-        return optimize.brentq(objective, self.anchors[ileft], self.anchors[iright])
+    def _objective(self, x, stat, offset):
+        params = {self.poi: x}
+        return (
+            # One of ppf/cdf is trivial here, depending on self.use_cdf
+            self._ppf(params=params)
+            - self._cdf(data=stat.compute(params=params), params=params)
+            + offset
+        )
 
 
 @export

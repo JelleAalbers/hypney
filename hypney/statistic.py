@@ -1,5 +1,8 @@
 from copy import copy
 import functools
+import gzip
+from pathlib import Path
+import pickle
 import warnings
 
 import eagerpy as ep
@@ -54,6 +57,11 @@ class Statistic:
                 # Leave self.dist at None (some estimators will complain)
                 assert self._dist is None
                 return
+        if isinstance(dist, (str, Path)):
+            # Load distribution from a pickle
+            _open = gzip.open if str(dist).endswith(".gz") else open
+            with _open(dist) as f:
+                dist = pickle.load(f)
 
         if self._has_redefined("_dist_params"):
             # For some statistics (e.g. count), distributions take different
@@ -229,11 +237,15 @@ class Statistic:
 
             # The interpolator will work in the new (dist) anchors
             # Thus model_builder must transform back to the old (model) anchors
-            def model_builder(dist_params):
-                model_params = {
-                    model_pname: model_to_dist_anchor[dist_params[dist_pname]]
-                }
-                return self.dist_from_toys(params=model_params, **kwargs)
+            # We cannot define the function here inline, that would break pickle
+            model_builder = functools.partial(
+                _transformed_model_builder,
+                self=self,
+                model_pname=model_pname,
+                dist_pname=dist_pname,
+                model_to_dist_anchor=model_to_dist_anchor,
+                **kwargs,
+            )
 
             anchors = dist_anchors
 
@@ -244,3 +256,10 @@ class Statistic:
         return hypney.models.Interpolation(
             model_builder, anchors, progress=progress, map=map, methods=methods,
         ).fix_except(anchors.keys())
+
+
+def _transformed_model_builder(
+    dist_params, *, self, model_pname, dist_pname, model_to_dist_anchor, **kwargs
+):
+    model_params = {model_pname: model_to_dist_anchor[dist_params[dist_pname]]}
+    return self.dist_from_toys(params=model_params, **kwargs)
