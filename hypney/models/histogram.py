@@ -62,19 +62,24 @@ def from_histogram(histogram, bin_edges=None, *args, **kwargs):
 
 
 @export
-def from_samples(samples, bin_edges=None, bin_count_multiplier=1, mass_bins=False):
+def from_samples(
+    samples, bin_edges=None, bin_count_multiplier=1, max_bins=1_000, mass_bins=False
+):
     samples = np.asarray(samples)
-    assert len(samples)
     is_fin = np.isfinite(samples)
     if not np.all(is_fin):
         warnings.warn(
             f"Throwing away {(~is_fin).sum()} non-finite samples out of {len(samples)}"
         )
         samples = samples[is_fin]
+    assert len(samples), "No samples to estimate distribution on"
 
     if bin_edges is None:
         bin_edges = guess_bin_edges(
-            samples, bin_count_multiplier=bin_count_multiplier, mass_bins=mass_bins
+            samples,
+            bin_count_multiplier=bin_count_multiplier,
+            mass_bins=mass_bins,
+            max_bins=1_000,
         )
     if not len(bin_edges):
         # All samples are the same, return a delta function distribution
@@ -90,7 +95,7 @@ def from_samples(samples, bin_edges=None, bin_count_multiplier=1, mass_bins=Fals
 
 
 @export
-def guess_bin_edges(samples, bin_count_multiplier=1, mass_bins=False):
+def guess_bin_edges(samples, bin_count_multiplier=1, mass_bins=False, max_bins=1_000):
     samples = np.asarray(samples)
 
     if mass_bins:
@@ -117,7 +122,8 @@ def guess_bin_edges(samples, bin_count_multiplier=1, mass_bins=False):
         width_fd = 2 * iqr / len(samples) ** (1 / 3)
 
         mi, ma = samples.min(), samples.max()
-        result = np.linspace(mi, ma, int(bin_count_multiplier * (ma - mi) / width_fd))
+        n_bins = min(max_bins, int(bin_count_multiplier * (ma - mi) / width_fd))
+        result = np.linspace(mi, ma, n_bins)
 
     if mass_bins:
         # Add ultratight bins for the probability masses
