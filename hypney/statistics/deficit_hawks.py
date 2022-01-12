@@ -33,18 +33,10 @@ class DeficitHawk(hypney.Statistic):
         self._init_cut_stats()
 
     def _compute(self, params):
-        # Check for vectorization, undo any (1,) batch shape nonsense
-        batch_shape = self.model._batch_shape(params)
-        assert (
-            prod(batch_shape) == 1
-        ), f"DeficitHawk is not yet vectorized, can't handle batch shape {batch_shape}"
-        params = {k: v.reshape((),) for k, v in params.items()}
-
+        # (n_cuts, {batch_shape})
         scores = self._score_cuts(params)
-        result = ep.min(ep.stack(scores, axis=0), axis=-1)
-
-        # Restore any desired (1,) batch shapes... may it do you fine
-        return result.reshape(batch_shape)
+        # assert scores.shape[1:] == self.model._batch_shape(params)
+        return ep.min(scores, axis=0)
 
     def best_cut(self, params=None, **kwargs):
         """Return dict with information about the best cut/region"""
@@ -62,7 +54,7 @@ class DeficitHawk(hypney.Statistic):
         pass
 
     def _score_cuts(self, params):
-        """Return statistic for each cut, given params"""
+        """Return (n_cuts, {batch_shape} with statistic for each cut, given params"""
         raise NotImplementedError
 
     def _cut_info(self, cut_i):
@@ -87,9 +79,17 @@ class SimpleHawk(DeficitHawk):
         raise NotImplementedError()
 
     def _score_cuts(self, params):
+        # (n_cuts)
         frac = self._acceptance(params)
-        mu = frac * self.model.rate(params)
-        return self._compute_scores(n=self._observed, mu=mu, frac=frac)
+        # ({batch_shape})
+        rate = self.model._to_tensor(self.model.rate(params))
+        # ({batch_shape}, n_cuts)
+        mu = frac * rate[...,None]
+        # ({batch_shape}, n_cuts)
+        result = self._compute_scores(n=self._observed, mu=mu, frac=frac)
+        # (n_cuts, {batch_shape})
+        axis_order = tuple(np.roll(np.arange(len(result.shape)), 1).tolist())
+        return result.transpose(axis_order)
 
     def _cut_info(self, cut_i):
         return dict(i=cut_i, cut=self.cuts[cut_i], n_observed=self._observed[cut_i],)
@@ -129,7 +129,10 @@ class FullHawk(DeficitHawk):
         )
 
     def _score_cuts(self, params):
-        return [stat._compute(params) for stat in self.cut_stats]
+        # (n_cuts, {batch_shape})
+        result = ep.stack([stat._compute(params) for stat in self.cut_stats])
+        # assert result.shape[1:] == self.model._batch_shape(params)
+        return result
 
     def _cut_info(self, cut_i):
         return dict(
@@ -341,6 +344,7 @@ class PNOneCut(hypney.Statistic):
     """
 
     def _compute(self, params):
+        # ({batch_shape})
         mu = self.model._rate(params)
         n = len(self.data)
         if self.model._backend_name == "numpy":

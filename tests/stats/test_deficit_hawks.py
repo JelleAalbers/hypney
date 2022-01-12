@@ -68,19 +68,23 @@ def test_pn():
                 assert min_seen == pmin_obs, "pmin found too small p'"
 
 
-# def test_pn_vectorization():
-#     model = hp.uniform(rate=40).fix_except("rate")
-#     toy_data = model.simulate()
+def test_pn_vectorization():
+    model = hp.uniform(rate=40).fix_except("rate")
+    toy_data = model.simulate()
 
-#     rates = np.array([0, 2, 5, 7.2])
+    rates = np.array([0, 2, 5, 7.2])
 
-#     stat = hp.PNAllRegionHawk(model, data=toy_data)
-#     np.testing.assert_array_equal(
-#         stat.compute(rate=rates),
-#         np.array([stat.compute(rate=r) for r in rates ]))
+    for stat_class in [hp.PNAllRegionHawkSlow, hp.PNAllRegionHawk]:
+        print(stat_class)
+        stat = stat_class(model, data=toy_data)
+        np.testing.assert_array_equal(
+            stat.compute(rate=rates),
+            np.array([stat.compute(rate=r) for r in rates ]))
 
-#     cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
-#     stat = hp.PNFixedRegionHawk(model, cuts=cuts, data=toy_data)
-#     np.testing.assert_array_equal(
-#         stat.compute(rate=rates),
-#         np.array([stat.compute(rate=r) for r in rates ]))
+    for stat_class in [hp.PNFixedRegionHawkSlow, hp.PNFixedRegionHawk]:
+        print(stat_class)
+        cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
+        stat = stat_class(model, cuts=cuts, data=toy_data)
+        np.testing.assert_array_equal(
+            stat.compute(rate=rates),
+            np.array([stat.compute(rate=r) for r in rates ]))
