@@ -196,9 +196,12 @@ class FixedRegionFullHawk(FullHawk):
 
 @export
 class AllRegionHawk:
-    def __init__(self, *args, n_max=float("inf"), side_constraint="none", **kwargs):
+    def __init__(self, *args, n_max=float("inf"), regions_type="all", central_point=None, **kwargs):
         self._n_max = n_max
-        self._side_constraint = side_constraint
+        self._regions_type = regions_type
+        # For regions_type = "central" / "central_symmetric"
+        self._central_point = central_point
+
         super().__init__(*args, **kwargs)
         assert (
             self.model.n_dim == 1
@@ -207,14 +210,25 @@ class AllRegionHawk:
     def _init_cuts(self):
         # Build all intervals / cuts, 2-tuples of (left, right)
         # OK to use numpy here, outside autodiff anyway
+        x = self.data[:, 0].numpy()
+        if self._regions_type == 'central_symmetric':
+            # Create 'mirror events' reflected in the central point
+            x = np.concatenate([
+                x,
+                self._central_point - (x - self._central_point)])
+
         self._points = np.concatenate(
-            [[-float("inf")], np.sort(self.data[:, 0].numpy()), [float("inf")]]
+            [[-float("inf")], np.sort(x), [float("inf")]]
         )
         self._indices = self._build_cut_indices()
         self.cuts = self._points[self._indices]
-
         i, j = self._indices[:, 0], self._indices[:, 1]
         self._observed = j - (i + 1)
+
+        if self._regions_type == 'central_symmetric':
+            # Don't count artificial mirror events
+            assert np.all(self._observed % 2) == 0
+            self._observed = self._observed // 2
 
         # TODO: this optimization could be used for fixed cuts too
         if self.signal_only:
@@ -240,20 +254,28 @@ class AllRegionHawk:
         i, j = self._indices[:, 0], self._indices[:, 1]
         return cdfs[..., j] - cdfs[..., i]
 
-    def _build_cut_indices(self, side_constraint=None):
+    def _build_cut_indices(self, regions_type=None):
         n_points = len(self._points)
-        if side_constraint is None:
-            side_constraint = self._side_constraint
-        if side_constraint == "none":
+        if regions_type is None:
+            regions_type = self._regions_type
+
+        if isinstance(regions_type, (tuple, list)):
+            # Combine several types of regions
+            # (Do not allow central_symmetric, which requires mirroring events)
+            assert 'central_symmetric' not in regions_type
+            return np.concatenate(
+                [self._build_cut_indices(r) for r in regions_type]
+            )
+        if regions_type == "all":
             # (X, Y > X)
             indices = np.stack(np.indices((n_points, n_points)), axis=-1).reshape(-1, 2)
             return indices[indices[:, 1] > indices[:, 0]]
-        elif side_constraint == "left":
+        elif regions_type == "left":
             # (0, X)
             return np.stack(
                 [np.zeros(n_points - 1, dtype=np.int), np.arange(1, n_points)], axis=-1
             )
-        elif side_constraint == "right":
+        elif regions_type == "right":
             # (X, n_points - 1)
             return np.stack(
                 [
@@ -262,12 +284,24 @@ class AllRegionHawk:
                 ],
                 axis=-1,
             )
-        elif side_constraint == "both":
-            # left and right-constrainted intervals
-            return np.concatenate(
-                [self._build_cut_indices("left"), self._build_cut_indices("right"),]
-            )
-        raise ValueError(f"Unknown side constraint {side_constraint}")
+        elif regions_type == 'central':
+            indices = self._build_cut_indices(regions_type="all")
+            return indices[
+                (self._points[indices[:,0]] <= self._central_point)
+                & (self._points[indices[:,1]] >= self._central_point)]
+        elif regions_type == 'central_symmetric':
+            # Mirror events have been created around the central point
+            assert n_points % 2 == 0
+            # Index of closest event left of central point
+            left_i = (n_points // 2) - 1
+            right_i = left_i + 1
+            n_shift = np.arange(left_i + 1, dtype=np.int)
+            return np.stack([
+                (left_i - n_shift),
+                (right_i + n_shift)],
+                axis=-1)
+
+        raise ValueError(f"Unknown side constraint {regions_type}")
 
     @staticmethod
     @hypney.utils.numba.maybe_jit
