@@ -1,9 +1,10 @@
 from copy import copy
+from concurrent.futures import ProcessPoolExecutor
 import functools
 import gzip
+import os
 from pathlib import Path
 import pickle
-import warnings
 
 import eagerpy as ep
 import numpy as np
@@ -260,6 +261,41 @@ class Statistic:
         return hypney.models.Interpolation(
             model_builder, anchors, progress=progress, map=map, methods=methods,
         ).fix_except(anchors.keys())
+
+    def with_stored_dist(
+        self, dist_filename, n_toys=None, max_workers=None, dist_dir="cached_dists"
+    ):
+        """Return statistic with distribution loaded from cache_dir,
+        or rebuilt from toy mc if file does not exist
+        """
+        if n_toys is None:
+            n_toys = 10_000
+        if max_workers is None:
+            max_workers = min(32, os.cpu_count() - 4)
+
+        dist_dir = Path(f"./{dist_dir}/")
+        dist_dir.mkdir(exist_ok=True)
+        dist_filename = dist_dir / f"{dist_filename}_{n_toys}.pkl.gz"
+
+        if dist_filename.exists():
+            with gzip.open(dist_filename) as f:
+                return self.set(dist=pickle.load(f))
+
+        else:
+            mu_min, mu_max = [f(hp.DEFAULT_RATE_GRID) for f in (min, max)]
+            print(
+                f"Building distribution {dist_filename}, {n_toys} toys,"
+                f"mu in [{mu_min}, {mu_max}]"
+            )
+            with ProcessPoolExecutor(max_workers=max_workers) as exc:
+                dist = self.interpolate_dist_from_toys(
+                    anchors=dict(rate=hp.DEFAULT_RATE_GRID.tolist()),
+                    n_toys=n_toys,
+                    map=exc.map,
+                )
+            with gzip.open(dist_filename, mode="wb") as f:
+                pickle.dump(dist, f)
+            return self.set(dist=dist)
 
 
 def _transformed_model_builder(

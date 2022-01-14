@@ -3,6 +3,7 @@ from math import prod
 import typing as ty
 
 import eagerpy as ep
+import numba
 import numpy as np
 from scipy import stats
 
@@ -84,7 +85,7 @@ class SimpleHawk(DeficitHawk):
         # ({batch_shape})
         rate = self.model._to_tensor(self.model.rate(params))
         # ({batch_shape}, n_cuts)
-        mu = frac * rate[...,None]
+        mu = frac * rate[..., None]
         # ({batch_shape}, n_cuts)
         result = self._compute_scores(n=self._observed, mu=mu, frac=frac)
         # (n_cuts, {batch_shape})
@@ -196,7 +197,14 @@ class FixedRegionFullHawk(FullHawk):
 
 @export
 class AllRegionHawk:
-    def __init__(self, *args, n_max=float("inf"), regions_type="all", central_point=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        n_max=float("inf"),
+        regions_type="all",
+        central_point=None,
+        **kwargs,
+    ):
         self._n_max = n_max
         self._regions_type = regions_type
         # For regions_type = "central" / "central_symmetric"
@@ -211,21 +219,15 @@ class AllRegionHawk:
         # Build all intervals / cuts, 2-tuples of (left, right)
         # OK to use numpy here, outside autodiff anyway
         x = self.data[:, 0].numpy()
-        if self._regions_type == 'central_symmetric':
+        if self._regions_type == "central_symmetric":
             # Create 'mirror events' reflected in the central point
-            x = np.concatenate([
-                x,
-                self._central_point - (x - self._central_point)])
+            x = np.concatenate([x, self._central_point - (x - self._central_point)])
 
-        self._points = np.concatenate(
-            [[-float("inf")], np.sort(x), [float("inf")]]
-        )
+        self._points = np.concatenate([[-float("inf")], np.sort(x), [float("inf")]])
         self._indices = self._build_cut_indices()
-        self.cuts = self._points[self._indices]
-        i, j = self._indices[:, 0], self._indices[:, 1]
-        self._observed = j - (i + 1)
+        self._observed = np.diff(self._indices, axis=1)[:, 0] - 1
 
-        if self._regions_type == 'central_symmetric':
+        if self._regions_type == "central_symmetric":
             # Don't count artificial mirror events
             assert np.all(self._observed % 2) == 0
             self._observed = self._observed // 2
@@ -233,7 +235,6 @@ class AllRegionHawk:
         # TODO: this optimization could be used for fixed cuts too
         if self.signal_only:
             # Compute expected and observed events in each interval
-            cdfs = self.model.cdf(data=self._points)
             accs = self._acceptance()
 
             # Select only the largest (most expected events) cuts
@@ -244,13 +245,16 @@ class AllRegionHawk:
                 n_max=min(self._n_max, len(self.data)),
             )
 
-            self.cuts, self._cached_acceptance, self._observed, self._indices = [
-                x[largest_cut_i]
-                for x in (self.cuts, accs, self._observed, self._indices)
+            self._cached_acceptance, self._observed, self._indices = [
+                x[largest_cut_i] for x in (accs, self._observed, self._indices)
             ]
+
+        self.cuts = self._points[self._indices]
 
     def _acceptance(self, params=None):
         cdfs = self.model.cdf(data=self._points, params=params)
+        # Shorter but less clear, seems equally fast
+        # return np.diff(cdfs[..., self._indices], axis=-1)[...,0]
         i, j = self._indices[:, 0], self._indices[:, 1]
         return cdfs[..., j] - cdfs[..., i]
 
@@ -262,14 +266,11 @@ class AllRegionHawk:
         if isinstance(regions_type, (tuple, list)):
             # Combine several types of regions
             # (Do not allow central_symmetric, which requires mirroring events)
-            assert 'central_symmetric' not in regions_type
-            return np.concatenate(
-                [self._build_cut_indices(r) for r in regions_type]
-            )
+            assert "central_symmetric" not in regions_type
+            return np.concatenate([self._build_cut_indices(r) for r in regions_type])
         if regions_type == "all":
             # (X, Y > X)
-            indices = np.stack(np.indices((n_points, n_points)), axis=-1).reshape(-1, 2)
-            return indices[indices[:, 1] > indices[:, 0]]
+            return all_cut_indices(n_points)
         elif regions_type == "left":
             # (0, X)
             return np.stack(
@@ -284,22 +285,20 @@ class AllRegionHawk:
                 ],
                 axis=-1,
             )
-        elif regions_type == 'central':
+        elif regions_type == "central":
             indices = self._build_cut_indices(regions_type="all")
             return indices[
-                (self._points[indices[:,0]] <= self._central_point)
-                & (self._points[indices[:,1]] >= self._central_point)]
-        elif regions_type == 'central_symmetric':
+                (self._points[indices[:, 0]] <= self._central_point)
+                & (self._points[indices[:, 1]] >= self._central_point)
+            ]
+        elif regions_type == "central_symmetric":
             # Mirror events have been created around the central point
             assert n_points % 2 == 0
             # Index of closest event left of central point
             left_i = (n_points // 2) - 1
             right_i = left_i + 1
             n_shift = np.arange(left_i + 1, dtype=np.int)
-            return np.stack([
-                (left_i - n_shift),
-                (right_i + n_shift)],
-                axis=-1)
+            return np.stack([(left_i - n_shift), (right_i + n_shift)], axis=-1)
 
         raise ValueError(f"Unknown side constraint {regions_type}")
 
@@ -319,6 +318,20 @@ class AllRegionHawk:
                 largest_acc[n] = mu
                 largest_i[n] = i
         return largest_i
+
+
+@export
+@numba.njit
+def all_cut_indices(n):
+    """Return indices of [l, r>l] cuts on n events"""
+    # ~10x faster than stacking and cutting np.indices(n,n)
+    result = np.empty((n * (n - 1) // 2, 2), np.int32)
+    i = 0
+    for l in range(n):
+        for r in range(l + 1, n):
+            result[i] = l, r
+            i += 1
+    return result
 
 
 @export
@@ -503,3 +516,12 @@ class YellinOptItv(AllRegionFullHawk):
     def _dist_params(self, params):
         # Distribution depends only on # expected events in the region
         return dict(mu=self.model._rate(params))
+
+
+@export
+def uniform_sn_cuts(n):
+    """Return cuts terminating at the n-quantiles of a uniform(0,1)
+    signal distribution"""
+    fracs = np.linspace(0, 1, n + 1)
+    cuts = np.array(list(itertools.product(fracs, fracs)))
+    return cuts[cuts[:, 0] < cuts[:, 1]]

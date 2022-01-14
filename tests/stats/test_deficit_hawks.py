@@ -4,6 +4,15 @@ from scipy import stats
 import hypney.all as hp
 
 
+def test_cut_indices():
+    def cut_indices_numpy(n):
+        indices = np.stack(np.indices((n, n)), axis=-1).reshape(-1, 2)
+        return indices[indices[:, 1] > indices[:, 0]]
+
+    for n in [0, 1, 10]:
+        np.testing.assert_almost_equal(cut_indices_numpy(n), hp.all_cut_indices(n))
+
+
 def test_pn_simple():
     """Test simplified pn against full pn"""
     model = hp.uniform(rate=40).fix_except("rate")
@@ -78,13 +87,13 @@ def test_pn_vectorization():
         print(stat_class)
         stat = stat_class(model, data=toy_data)
         np.testing.assert_array_equal(
-            stat.compute(rate=rates),
-            np.array([stat.compute(rate=r) for r in rates ]))
+            stat.compute(rate=rates), np.array([stat.compute(rate=r) for r in rates])
+        )
 
     for stat_class in [hp.PNFixedRegionHawkSlow, hp.PNFixedRegionHawk]:
         print(stat_class)
         cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
         stat = stat_class(model, cuts=cuts, data=toy_data)
         np.testing.assert_array_equal(
-            stat.compute(rate=rates),
-            np.array([stat.compute(rate=r) for r in rates ]))
+            stat.compute(rate=rates), np.array([stat.compute(rate=r) for r in rates])
+        )
