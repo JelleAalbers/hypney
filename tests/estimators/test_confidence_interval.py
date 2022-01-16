@@ -2,8 +2,7 @@ import numpy as np
 import pytest
 from scipy import stats
 
-import hypney
-from hypney.basics import Parameter
+import hypney.all as hp
 
 
 def poisson_ul(n, mu_bg=0, cl=0.9):
@@ -28,32 +27,26 @@ def poisson_ll(n, cl=0.9):
 
 
 def test_poisson_upper_limit():
-    m = hypney.models.uniform(data=np.array([]))
-    stat = hypney.statistics.Count(m)
+    m = hp.uniform(data=np.array([]))
+    stat = hp.Count(m)
 
-    ul = hypney.estimators.UpperLimit(
-        stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False
-    )()
+    ul = hp.UpperLimit(stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False)()
     np.testing.assert_allclose(ul, poisson_ul(0))
 
-    ul = hypney.estimators.UpperLimit(
-        stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=True
-    )()
+    ul = hp.UpperLimit(stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=True)()
     np.testing.assert_allclose(ul, poisson_ul(0))
 
     # Invalid anchor
     with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(stat, poi="rate", anchors=[-5, 5], cl=0.9)()
+        hp.UpperLimit(stat, poi="rate", anchors=[-5, 5], cl=0.9)()
 
     # Limit is above last anchor
-    with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(stat, poi="rate", anchors=[0, 2], cl=0.9)()
+    with pytest.raises(hp.FullIntervalError):
+        hp.UpperLimit(stat, poi="rate", anchors=[0, 2], cl=0.9)()
 
     # Limit is below first anchor
-    with pytest.raises(ValueError):
-        hypney.estimators.UpperLimit(
-            stat.set(data=np.ones(10)), poi="rate", anchors=[0, 2], cl=0.9
-        )()
+    with pytest.raises(hp.EmptyIntervalError):
+        hp.UpperLimit(stat.set(data=np.ones(0)), poi="rate", anchors=[20, 40], cl=0.9)()
 
     # Test anchors from toy MC process are preserved.
     # -- Actually, I don't see how to do this with reparametrized distributions
@@ -65,57 +58,53 @@ def test_poisson_upper_limit():
     # Data is still empty, so UL = bestfit = highest possible value = 0
     mneg = m.reparametrize(
         lambda params: dict(rate=-params["neg_rate"]),
-        param_specs=(Parameter(name="neg_rate", default=0, min=-float("inf"), max=0),),
+        param_specs=(
+            hp.Parameter(name="neg_rate", default=0, min=-float("inf"), max=0),
+        ),
     )
-    stat3 = hypney.statistics.Count(mneg)
-    ul = hypney.estimators.UpperLimit(
-        stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1
-    )()
+    stat3 = hp.Count(mneg)
+    ul = hp.UpperLimit(stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1)()
     assert ul == -poisson_ll(0) == 0
 
     # Now data is not empty, UL finite (and negative)
-    ul = hypney.estimators.UpperLimit(
+    ul = hp.UpperLimit(
         stat3(data=np.ones(50)), poi="neg_rate", anchors=[-50, -20], cl=0.9, sign=-1
     )()
     np.testing.assert_allclose(ul, -poisson_ll(50))
 
 
 def test_poisson_lower_limit():
-    m = hypney.models.uniform(data=np.array([]))
-    stat = hypney.statistics.Count(m)
+    m = hp.uniform(data=np.array([]))
+    stat = hp.Count(m)
 
-    ll = hypney.estimators.LowerLimit(
-        stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False
-    )()
+    ll = hp.LowerLimit(stat, poi="rate", anchors=[0, 5], cl=0.9, use_cdf=False)()
     np.testing.assert_allclose(ll, poisson_ll(0))
 
     # Test case where statistic decreases as parameter increases
     mneg = m.reparametrize(
         lambda params: dict(rate=-params["neg_rate"]),
-        param_specs=(Parameter(name="neg_rate", default=0, min=-float("inf"), max=0),),
+        param_specs=(
+            hp.Parameter(name="neg_rate", default=0, min=-float("inf"), max=0),
+        ),
     )
-    stat3 = hypney.statistics.Count(mneg)
-    ll = hypney.estimators.LowerLimit(
-        stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1
-    )()
+    stat3 = hp.Count(mneg)
+    ll = hp.LowerLimit(stat3, poi="neg_rate", anchors=[-20, 0], cl=0.9, sign=-1)()
     np.testing.assert_allclose(ll, -poisson_ul(0))
 
-    ll = hypney.estimators.LowerLimit(
+    ll = hp.LowerLimit(
         stat3(data=np.ones(50)), poi="neg_rate", anchors=[-100, -50], cl=0.9, sign=-1
     )()
     np.testing.assert_allclose(ll, -poisson_ul(50))
 
 
 def test_poisson_central_interval():
-    m = hypney.models.uniform(data=np.array([]))
-    stat = hypney.statistics.Count(m)
-    ll, ul = hypney.estimators.CentralInterval(
-        stat, poi="rate", anchors=[0, 5], cl=0.8
-    )()
+    m = hp.uniform(data=np.array([]))
+    stat = hp.Count(m)
+    ll, ul = hp.CentralInterval(stat, poi="rate", anchors=[0, 5], cl=0.8)()
     assert ll == 0
     np.testing.assert_allclose(ul, poisson_ul(0))
 
-    ll, ul = hypney.estimators.CentralInterval(
+    ll, ul = hp.CentralInterval(
         stat(data=np.zeros(50)), poi="rate", anchors=[10, 50, 90], cl=0.8
     )()
     np.testing.assert_allclose(ll, poisson_ll(50))
