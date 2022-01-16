@@ -5,6 +5,7 @@ import gzip
 import os
 from pathlib import Path
 import pickle
+import warnings
 
 import eagerpy as ep
 import numpy as np
@@ -142,7 +143,12 @@ class Statistic:
     ##
 
     def rvs(
-        self, size=1, params=NotChanged, transform=np.asarray, **kwargs
+        self,
+        size=1,
+        params=NotChanged,
+        transform=np.asarray,
+        nan_on_exception=False,
+        **kwargs,
     ) -> np.ndarray:
         """Return statistic evaluated on simulated data,
         generated from model with params
@@ -160,11 +166,14 @@ class Statistic:
         results = np.zeros(size)
         for i in range(size):
             sim_data = transform(self.model._simulate(params=self.model.defaults))
-            try:
+            if nan_on_exception:
+                try:
+                    results[i] = self.compute(data=sim_data)
+                except Exception as e:
+                    warnings.warn(f"Exception during test statistic evaluation: {e}")
+                    results[i] = float("nan")
+            else:
                 results[i] = self.compute(data=sim_data)
-            except Exception as e:
-                warnings.warn(f"Exception during test statistic evaluation: {e}")
-                results[i] = float("nan")
         return results
 
     ##
@@ -181,6 +190,7 @@ class Statistic:
         n_toys=1000,
         transform=np.asarray,
         options=None,
+        nan_on_exception=False,
         **kwargs,
     ):
         """Return an estimated distribution of the statistic given params
@@ -196,7 +206,7 @@ class Statistic:
 
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
         self = self.set(params=params, **kwargs)
-        toys = self.rvs(n_toys, transform=transform)
+        toys = self.rvs(n_toys, transform=transform, nan_on_exception=nan_on_exception)
 
         dist = hypney.models.from_samples(toys, **options)
         # Remove all parameters (to avoid confusion with model parameters)
@@ -282,14 +292,14 @@ class Statistic:
                 return self.set(dist=pickle.load(f))
 
         else:
-            mu_min, mu_max = [f(hp.DEFAULT_RATE_GRID) for f in (min, max)]
+            mu_min, mu_max = [f(hypney.DEFAULT_RATE_GRID) for f in (min, max)]
             print(
                 f"Building distribution {dist_filename}, {n_toys} toys,"
                 f"mu in [{mu_min}, {mu_max}]"
             )
             with ProcessPoolExecutor(max_workers=max_workers) as exc:
                 dist = self.interpolate_dist_from_toys(
-                    anchors=dict(rate=hp.DEFAULT_RATE_GRID.tolist()),
+                    anchors=dict(rate=hypney.DEFAULT_RATE_GRID.tolist()),
                     n_toys=n_toys,
                     map=exc.map,
                 )
