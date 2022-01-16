@@ -1,10 +1,28 @@
 from functools import partial
 import numpy as np
-from scipy import optimize
+from scipy import optimize, interpolate
 
 import hypney
 
 export, __all__ = hypney.exporter()
+
+
+@export
+class EmptyIntervalError(Exception):
+    """Raised when empty interval would be returned
+    (possible, but also possible anchors badly chosen)
+    """
+
+    pass
+
+
+@export
+class FullIntervalError(Exception):
+    """Raised when the whole real line would be returned
+    (possible, but also possible anchors badly chosen)
+    """
+
+    pass
 
 
 @export
@@ -119,7 +137,7 @@ class ConfidenceInterval:
         # crit - stat <= 0 (i.e. crit too low, so still in interval)
         still_in = np.where(self.combined_sign * crit_minus_stat <= 0)[0]
         if not len(still_in):
-            raise ValueError(
+            raise EmptyIntervalError(
                 f"None of the anchors {self.anchors} are inside the confidence interval"
             )
 
@@ -131,7 +149,7 @@ class ConfidenceInterval:
                     # Fine, since it's the maximum possible value
                     return self.anchors[-1]
                 else:
-                    raise ValueError(
+                    raise FullIntervalError(
                         f"Can't compute upper limit, highest anchor {self.anchors[-1]} still in interval"
                     )
             iright = ileft + 1
