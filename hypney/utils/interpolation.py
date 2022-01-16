@@ -1,9 +1,23 @@
+from functools import partial
 import itertools
+
+import numpy as np
 import eagerpy as ep
+from scipy import interpolate
 
 import hypney
 
 export, __all__ = hypney.exporter()
+
+
+@export
+def interp1d_loglog(x, y):
+    return partial(_wrap_interpolator, interpolate.interp1d(np.log(x), np.log(y)))
+
+
+def _wrap_interpolator(f, x):
+    # Just to help pickle
+    return np.exp(f(np.log(x)))
 
 
 @export
