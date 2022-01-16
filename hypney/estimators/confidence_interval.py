@@ -36,13 +36,25 @@ class ConfidenceInterval:
         anchors=None,
         use_cdf=False,
         ppf_fudge=0,
+        ppf_interpolation=None,
     ):
+        """
+
+        Args:
+         - ppf_interpolation: can be
+           None to just actually ppf at non-anchor values
+           'linear' to linearly interpolate ppf(quantile) between anchors
+           'loglog' linearly interpolate log(ppf[log(quantile)])
+
+        """
         self.stat = stat
         self.poi = poi
         self.cl = cl
         self.sign = sign
         self.use_cdf = use_cdf
         self.ppf_fudge = ppf_fudge
+        self._ppf_interpolation = ppf_interpolation
+
         self.poi_spec = self.stat.model.param_spec_for(poi)
 
         if not self.stat.dist:
@@ -99,6 +111,19 @@ class ConfidenceInterval:
             self._ppf_pre_fudge = stat.dist(quantiles=self.crit_quantile).ppf
             # Find critical value (=corresponding to quantile crit_quantile) at anchors.
             self.crit_at_anchors = self._ppf(params={self.poi: self.anchors})
+
+            if self._ppf_interpolation:
+                x, y = self.anchors, self.crit_at_anchors
+                if self._ppf_interpolation == "linear":
+                    self._ppf_pre_fudge = interpolate.interp1d(x, y)
+                elif self._ppf_interpolation == "loglog":
+                    self._ppf_pre_fudge = hypney.utils.interpolation.interp1d_loglog(
+                        x, y
+                    )
+                else:
+                    raise ValueError(
+                        f"Unknown ppf interpolations strategy {self._ppf_interpolation}"
+                    )
 
     def _ppf(self, *args, **kwargs):
         return self.ppf_fudge + self._ppf_pre_fudge(*args, **kwargs)
