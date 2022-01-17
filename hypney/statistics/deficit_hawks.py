@@ -157,17 +157,21 @@ class FixedRegionSimpleHawk(SimpleHawk):
             self._acceptance = self._get_cached_acceptance
 
     def _init_cut_stats(self):
-        # O(n log n)
-        data = np.sort(self.data[:, 0])
-        # Use two binary searches to count events in each cut
-        # O(ncuts * log n)
-        # TODO: implement cut types / openness.
-        self._observed = (
-            np.searchsorted(data, self.cuts[:, 1])
-            - np.searchsorted(data, self.cuts[:, 0]),
-        )
-        # Naive counting would be O(ncuts * n),
-        # assuming ncuts > O(log n), the above is faster.
+        left, right = self.cuts[:, 0], self.cuts[:, 1]
+        # TODO: figure out precise threshold when each algorithm is optimal
+        if len(self.cuts) > 1 + np.log(1 + len(self.data)):
+            # Many cuts. First sort data [O(n log n)], then use
+            # two binary searches to count events [O(ncuts * log n))]
+            data = np.sort(self.data[:, 0].raw)
+            self._observed = (
+                np.searchsorted(data, right) - np.searchsorted(data, left),
+            )
+        else:
+            # Many events. Just loop over data for each cut: O(ncuts * n)
+            data = self.data[:, 0].raw
+            self._observed = np.asarray(
+                [((l < data) * (data < r)).sum() for l, r in zip(left, right)]
+            )
 
     def _acceptance(self, params=None):
         return self.model.cdf(data=self.cuts[:, 1], params=params) - self.model.cdf(
@@ -321,9 +325,9 @@ class AllRegionHawk:
 
 
 @export
-@numba.njit
+@hypney.utils.numba.maybe_jit
 def all_cut_indices(n):
-    """Return indices of [l, r>l] cuts on n events"""
+    """Return indices of [l, r>l] cuts ending at n points"""
     # ~10x faster than stacking and cutting np.indices(n,n)
     result = np.empty((n * (n - 1) // 2, 2), np.int32)
     i = 0
