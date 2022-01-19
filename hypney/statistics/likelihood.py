@@ -47,7 +47,8 @@ class LikelihoodRatio(hypney.Statistic):
 
 @export
 class PLR(LikelihoodRatio):
-    # Dangerous! Goes down then up with rate poi, not nice / rectified / whatever
+    # Use via PLROrZero or SignedPLR in confidence intervals
+    # (Unsigned form goes down then up with rate poi, not countliker)
 
     def __init__(self, *args, poi="rate", **kwargs):
         if isinstance(poi, str):

@@ -13,19 +13,44 @@ def test_cut_indices():
         np.testing.assert_almost_equal(cut_indices_numpy(n), hp.all_cut_indices(n))
 
 
-def test_pn_simple():
-    """Test simplified pn against full pn"""
-    model = hp.uniform(rate=40).fix_except("rate")
-    toy_data = model.simulate()
-    assert (
-        hp.PNAllRegionHawk(model, data=toy_data).compute()
-        == hp.PNAllRegionHawkSlow(model, data=toy_data).compute()
-    )
-
+def test_simple_and_full():
+    """Test simplified hawks against full hawks"""
+    model = hp.uniform(rate=7).fix_except("rate")
     cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
-    fast_stat = hp.PNFixedRegionHawk(model, cuts=cuts, data=toy_data)
-    slow_stat = hp.PNFixedRegionHawkSlow(model, cuts=cuts, data=toy_data)
-    assert fast_stat.compute() == slow_stat.compute()
+
+    for toy_data in [], [0.05, 0.7, 0.4], [0.2, 0.7]:
+        toy_data = np.array(toy_data)[:, None]
+
+        for statname, (simple_all, full_all, simple_fixed, full_fixed) in [
+            (
+                "pn",
+                (
+                    hp.PNAllRegionHawk,
+                    hp.PNAllRegionHawkSlow,
+                    hp.PNFixedRegionHawk,
+                    hp.PNFixedRegionHawkSlow,
+                ),
+            ),
+            (
+                "lr",
+                (
+                    hp.AllRegionSimpleHawk,
+                    hp.AllRegionFullHawk,
+                    hp.FixedRegionSimpleHawk,
+                    hp.FixedRegionFullHawk,
+                ),
+            ),
+        ]:
+            print(f"\nNow testing {statname}\n")
+            simple_result = simple_all(model, data=toy_data).compute()
+            full_result = full_all(model, data=toy_data).compute()
+            np.testing.assert_almost_equal(simple_result, full_result)
+
+            fast_stat = simple_fixed(model, cuts=cuts, data=toy_data)
+            slow_stat = full_fixed(model, cuts=cuts, data=toy_data)
+            simple_result = fast_stat.compute()
+            full_result = slow_stat.compute()
+            np.testing.assert_almost_equal(simple_result, full_result)
 
 
 def test_pn():

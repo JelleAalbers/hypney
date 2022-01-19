@@ -70,11 +70,15 @@ def ensure_numpy(x):
 
 @export
 def ensure_float(x):
-    """Return a simple float from a 0-dimensional array, tensor, or float"""
-    if isinstance(x, ep.Tensor):
-        x = x.numpy()
-    if isinstance(x, np.ndarray):
-        return x.item()
+    """Return a simple float or int from a 0-dimensional array, tensor, or float"""
+    # Remove even multiple levels of array and tensor wrappers
+    while not isinstance(x, (float, int)):
+        if isinstance(x, ep.Tensor):
+            x = x.numpy()
+        elif isinstance(x, np.ndarray):
+            x = x.item()
+        else:
+            raise ValueError(f"Don't know how to convert {x} to float")
     return x
 
 

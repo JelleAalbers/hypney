@@ -1,5 +1,4 @@
 import itertools
-from math import prod
 import typing as ty
 
 import eagerpy as ep
@@ -8,7 +7,6 @@ import numpy as np
 from scipy import stats
 
 import hypney
-from hypney.utils.numba import factorial
 from .likelihood import SignedPLR
 
 export, __all__ = hypney.exporter()
@@ -18,10 +16,11 @@ export, __all__ = hypney.exporter()
 class DeficitHawk(hypney.Statistic):
 
     cuts: np.ndarray
+    _signal_only_default = False
     _cached_acceptance = itertools.repeat(None)
 
-    def __init__(self, *args, signal_only=False, **kwargs):
-        self.signal_only = signal_only
+    def __init__(self, *args, signal_only=None, **kwargs):
+        self.signal_only = self._signal_only_default
         super().__init__(*args, **kwargs)
         assert (
             len(self.model.param_names) == 1
@@ -66,9 +65,11 @@ class DeficitHawk(hypney.Statistic):
 @export
 class SimpleHawk(DeficitHawk):
     """Compute a simple function in each region
+
+    Defaults to signed likelihood ratio assuming no background
     """
 
-    statistic_class = SignedPLR
+    _signal_only_default = True
 
     _observed: np.ndarray = None
 
@@ -76,8 +77,15 @@ class SimpleHawk(DeficitHawk):
         """Compute _observed here if not already done earlier"""
         pass
 
-    def _compute_scores(self):
-        raise NotImplementedError()
+    def _compute_scores(self, n, mu, frac):
+        # TODO: eagerpy-ify
+        mu = hypney.utils.eagerpy.ensure_raw(mu)
+        n = hypney.utils.eagerpy.ensure_raw(n)
+        with np.errstate(divide="ignore"):
+            result = -2 * np.sign(n - mu) * ((n - mu) + n * np.log(mu / n))
+        # For n = 0, return -2 mu
+        result = np.where(n == 0, -2 * mu, result)
+        return self.model._to_tensor(result)
 
     def _score_cuts(self, params):
         # (n_cuts)
@@ -86,6 +94,7 @@ class SimpleHawk(DeficitHawk):
         rate = self.model._to_tensor(self.model.rate(params))
         # ({batch_shape}, n_cuts)
         mu = frac * rate[..., None]
+        # n is still (n_cuts,); OK for tail-first broadcasting)
         # ({batch_shape}, n_cuts)
         result = self._compute_scores(n=self._observed, mu=mu, frac=frac)
         # (n_cuts, {batch_shape})
@@ -107,7 +116,10 @@ class SimpleHawk(DeficitHawk):
 class FullHawk(DeficitHawk):
     """Compute a Statistic in each region"""
 
-    statistic_class: hypney.Statistic
+    # Won't actually do a _profile _likelihood,
+    # DeficitHawk restricts to single parameter,
+    # so conditional fit optimization is trivial (no optimizer called)
+    statistic_class = SignedPLR
 
     cut_stats: ty.List[hypney.models.CutModel]
 
@@ -115,8 +127,6 @@ class FullHawk(DeficitHawk):
         """Initialize a statistic for each cut"""
         self.cut_stats = tuple(
             [
-                # Won't actually run profile likelihood minimizer;
-                # DeficitHawk restricts to single parameter
                 self.statistic_class(
                     self.model.cut(
                         tuple(cut),
@@ -131,7 +141,9 @@ class FullHawk(DeficitHawk):
 
     def _score_cuts(self, params):
         # (n_cuts, {batch_shape})
-        result = ep.stack([stat._compute(params) for stat in self.cut_stats])
+        result = ep.stack(
+            self.model._to_tensor([stat._compute(params) for stat in self.cut_stats])
+        )
         # assert result.shape[1:] == self.model._batch_shape(params)
         return result
 
@@ -163,9 +175,7 @@ class FixedRegionSimpleHawk(SimpleHawk):
             # Many cuts. First sort data [O(n log n)], then use
             # two binary searches to count events [O(ncuts * log n))]
             data = np.sort(self.data[:, 0].raw)
-            self._observed = (
-                np.searchsorted(data, right) - np.searchsorted(data, left),
-            )
+            self._observed = np.searchsorted(data, right) - np.searchsorted(data, left)
         else:
             # Many events. Just loop over data for each cut: O(ncuts * n)
             data = self.data[:, 0].raw
@@ -201,6 +211,9 @@ class FixedRegionFullHawk(FullHawk):
 
 @export
 class AllRegionHawk:
+    # TODO: how to raise proper error (instead of cryptic init failure)
+    # if someone tries to init this class directly? Make abc base class?
+
     def __init__(
         self,
         *args,
@@ -376,12 +389,6 @@ class PNFixedRegionHawk(PNHawk, FixedRegionSimpleHawk):
     pass
 
 
-# @export
-# class YellinP(PNAllRegionHawk):
-#     # Alias
-#     pass
-
-
 # Alternate implementation via Full hawk. Should be much slower!
 
 
@@ -400,8 +407,7 @@ class PNOneCut(hypney.Statistic):
         n = len(self.data)
         if self.model._backend_name == "numpy":
             # Shortcut, avoids some overhead... :-(
-            q = stats.poisson.cdf(n, mu=mu.raw)
-            return self.model._to_tensor(q)
+            return stats.poisson.cdf(n, mu=mu.raw)
         poisson_model = hypney.models.poisson(mu=mu)
         return poisson_model.cdf(n)
 
@@ -420,102 +426,6 @@ class PNFixedRegionHawkSlow(FixedRegionFullHawk):
 class PNAllRegionHawkSlow(AllRegionFullHawk):
 
     statistic_class = PNOneCut
-
-    def _dist_params(self, params):
-        # Distribution depends only on # expected events in the region
-        return dict(mu=self.model._rate(params))
-
-
-##
-# Optimum interval
-##
-
-
-@export
-class OptItvOneCut(hypney.Statistic):
-    """Computes - C_n(x, mu) for one interval
-
-    Here, C_n(x, mu) is the probability of finding a largest N-event-containing
-    interval smaller than frac (i.e. with less fraction of expected signal)
-    given the true rate mu.
-    """
-
-    # TODO For some reason we get a recursion error when overriding init
-    # as we call super().__init___..
-    def _init_data(self, *args, **kwargs):
-        # We use cut_efficiency in the computations below
-        assert isinstance(self.model, hypney.models.CutModel)
-        self._ensure_cn_table_loaded()
-
-    def _ensure_cn_table_loaded(self):
-        # load the p_smaller_x table; store it with the class
-        # so we don't load this for every interval!
-        # TODO: where to store file in repo?
-        # TODO: This won't parallelize well.. maybe we should just load on import?
-        if hasattr(self, "_p_smaller_x_itp"):
-            return
-
-        import gzip
-        import pickle
-        import multihist
-        from scipy.interpolate import RegularGridInterpolator
-
-        with gzip.open(
-            "/home/jaalbers/Documents/projects/robust_inference_2/cn_cdf.pkl.gz"
-        ) as f:
-            mh = pickle.load(f)
-
-        # Pad with zero at frac = 0
-        cdfs = np.pad(mh.histogram, [(0, 0), (0, 0), (1, 0)])
-
-        points = mh.bin_centers()
-        # We cumulated along the 'frac' dimension; values represent
-        # P(frac <= right bin edge)
-        points[2] = np.concatenate([[0], mh.bin_edges[2][1:]])
-
-        # Full intervals (frac = 1) should not always score 1.
-        # Linearly interpolate the last cdf bin instead:
-        cdfs[:, :, -1] = (cdfs[:, :, -2] + (cdfs[:, :, -2] - cdfs[:, :, -3])).clip(0, 1)
-
-        self.__class__._p_smaller_x_itp = RegularGridInterpolator(points, cdfs)
-        self.__class__._itp_max_mu = mh.bin_centers("mu").max()
-
-    def _compute(self, params):
-        assert self.model._backend_name == "numpy"
-
-        # Get original rate after cuts... not very clean
-        # TODO: this won't vectorize / autodiff!!
-        mu = hypney.utils.eagerpy.ensure_float(self.model._orig_model._rate(params))
-        n = len(self.data)
-        frac = self.model.cut_efficiency(params)
-
-        # Minus, since deficit hawks take the minimum over cuts
-        return -self.p_smaller_itv(mu, n, frac)
-
-    def p_smaller_itv(self, mu, n, frac):
-        """Probability of finding a largest N-event-containing interval
-        smaller than frac (i.e. with less fraction of expected signal)
-        """
-        return self.__class__._p_smaller_x_itp([mu, n, frac]).item()
-
-
-@hypney.utils.numba.maybe_jit
-def p_smaller_x_0(mu, frac):
-    # Equation 2 from https://arxiv.org/pdf/physics/0203002.pdf
-    # The factorial causes OverflowError for sufficiently small/unlikely fracs
-    # TODO: maybe put 0 instead of raising exception?
-    x = frac * mu
-    m = int(np.floor(mu / x))
-    ks = np.arange(0, m + 1)
-    return (
-        (ks * x - mu) ** ks * np.exp(-ks * x) / factorial(ks) * (1 + ks / (mu - ks * x))
-    ).sum()
-
-
-@export
-class YellinOptItv(AllRegionFullHawk):
-
-    statistic_class = OptItvOneCut
 
     def _dist_params(self, params):
         # Distribution depends only on # expected events in the region
