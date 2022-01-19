@@ -273,10 +273,17 @@ class Statistic:
         ).fix_except(anchors.keys())
 
     def with_stored_dist(
-        self, dist_filename, n_toys=None, max_workers=None, dist_dir="cached_dists"
+        self,
+        dist_filename,
+        n_toys=None,
+        rate_anchors=hypney.DEFAULT_RATE_GRID,
+        max_workers=None,
+        dist_dir="cached_dists",
     ):
         """Return statistic with distribution loaded from cache_dir,
         or rebuilt from toy mc if file does not exist
+
+        TODO: describe rate anchors or generalize
         """
         if n_toys is None:
             n_toys = 10_000
@@ -292,7 +299,7 @@ class Statistic:
                 return self.set(dist=pickle.load(f))
 
         else:
-            mu_min, mu_max = [f(hypney.DEFAULT_RATE_GRID) for f in (min, max)]
+            mu_min, mu_max = [f(rate_anchors) for f in (min, max)]
             print(
                 f"Building distribution {dist_filename}, {n_toys} toys,"
                 f"mu in [{mu_min}, {mu_max}]"
