@@ -72,7 +72,9 @@ def ensure_numpy(x):
 def ensure_float(x):
     """Return a simple float or int from a 0-dimensional array, tensor, or float"""
     # Remove even multiple levels of array and tensor wrappers
-    while not isinstance(x, (float, int)):
+    tries_left = 3
+    while tries_left > 0 and not isinstance(x, (float, int)):
+        tries_left -= 1
         if isinstance(x, ep.Tensor):
             x = x.numpy()
         elif isinstance(x, np.ndarray):

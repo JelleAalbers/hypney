@@ -1,5 +1,6 @@
 import itertools
 import typing as ty
+import warnings
 
 import eagerpy as ep
 import numpy as np
@@ -80,8 +81,11 @@ class SimpleHawk(DeficitHawk):
         # TODO: eagerpy-ify
         mu = hypney.utils.eagerpy.ensure_raw(mu)
         n = hypney.utils.eagerpy.ensure_raw(n)
-        with np.errstate(divide="ignore"):
-            result = -2 * np.sign(n - mu) * ((n - mu) + n * np.log(mu / n))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with np.errstate(divide="ignore"):
+                result = -2 * np.sign(n - mu) * ((n - mu) + n * np.log(mu / n))
         # For n = 0, return -2 mu
         result = np.where(n == 0, -2 * mu, result)
         return self.model._to_tensor(result)
