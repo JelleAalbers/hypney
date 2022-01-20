@@ -33,7 +33,7 @@ class DeficitHawk(hypney.Statistic):
     def _compute(self, params):
         # (n_cuts, {batch_shape})
         scores = self._score_cuts(params)
-        # assert scores.shape[1:] == self.model._batch_shape(params)
+        assert scores.shape[1:] == self.model._batch_shape(params)
         return ep.min(scores, axis=0)
 
     def best_cut(self, params=None, **kwargs):
@@ -76,6 +76,7 @@ class SimpleHawk(DeficitHawk):
         pass
 
     def _compute_scores(self, n, mu, frac):
+        # mu here is expected events in the interval (not total/pre-cuts)
         # TODO: eagerpy-ify
         mu = hypney.utils.eagerpy.ensure_raw(mu)
         n = hypney.utils.eagerpy.ensure_raw(n)
@@ -95,6 +96,7 @@ class SimpleHawk(DeficitHawk):
         # n is still (n_cuts,); OK for tail-first broadcasting)
         # ({batch_shape}, n_cuts)
         result = self._compute_scores(n=self._observed, mu=mu, frac=frac)
+        assert result.shape == mu.shape
         # (n_cuts, {batch_shape})
         axis_order = tuple(np.roll(np.arange(len(result.shape)), 1).tolist())
         return result.transpose(axis_order)
@@ -142,7 +144,7 @@ class FullHawk(DeficitHawk):
         result = ep.stack(
             self.model._to_tensor([stat._compute(params) for stat in self.cut_stats])
         )
-        # assert result.shape[1:] == self.model._batch_shape(params)
+        assert result.shape[1:] == self.model._batch_shape(params)
         return result
 
     def _cut_info(self, cut_i):

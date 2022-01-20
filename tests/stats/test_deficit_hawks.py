@@ -40,12 +40,17 @@ def test_simple_and_full():
                     hp.FixedRegionFullHawk,
                 ),
             ),
+            # Yellin's CN statistic would have to be generalized
+            # to allow fixed region hawks.
+            ("yellin_cn", (hp.YellinCNHawk, hp.YellinCNFullHawk, None, None),),
         ]:
             print(f"\nNow testing {statname}\n")
             simple_result = simple_all(model, data=toy_data).compute()
             full_result = full_all(model, data=toy_data).compute()
             np.testing.assert_almost_equal(simple_result, full_result)
 
+            if simple_fixed is None:
+                continue
             fast_stat = simple_fixed(model, cuts=cuts, data=toy_data)
             slow_stat = full_fixed(model, cuts=cuts, data=toy_data)
             simple_result = fast_stat.compute()

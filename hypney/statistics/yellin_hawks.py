@@ -1,3 +1,7 @@
+"""Deficit hawks using Yellin's CN statistic
+
+i.e. the original optimum interval method.
+"""
 import gzip
 import pickle
 
@@ -34,30 +38,51 @@ p_smaller_x_itp = RegularGridInterpolator(points, cdfs)
 itp_max_mu = mh.bin_centers("mu").max()
 
 
+@export
 def p_smaller_itv(n, mu, frac):
     """Probability of finding a largest N-event-containing interval
     smaller than frac (i.e. with less fraction of expected signal)
+
+    Args:
+     - n: observed events
+     - mu: *total* expected events (not expected event in interval!)
+     - frac: fraction of events expected in interval
     """
-    # TODO: doesn't vectorize I guess...
-    return p_smaller_x_itp([mu, n, frac]).item()
+    # I'm assuming mu has the largest shape. Ravel may be inefficient but
+    # I think RegularGridInterpolator won't work without it
+    # TODO: eagerpy-ify this.
+    mu = hypney.utils.eagerpy.ensure_numpy(mu)
+    was_float = isinstance(mu, (int, float))
+    mu = np.asarray(mu)
+    n = np.asarray(0 * mu + n)
+    frac = np.asarray(0 * mu + frac)
+
+    points = np.stack([mu.ravel(), n.ravel(), frac.ravel()]).T
+    result = p_smaller_x_itp(points)
+    result = result.reshape(mu.shape)
+    if was_float:
+        return result.item()
+    return result
 
 
-class YellinOptItv(hypney.Statistic):
+@export
+class YellinCNHawk(AllRegionSimpleHawk):
     def _dist_params(self, params):
         # Distribution depends only on # expected events
         return dict(mu=self.model._rate(params))
 
     def _compute_scores(self, n, mu, frac):
-        return -p_smaller_itv(n, hypney.utils.eagerpy.ensure_numpy(mu), frac)
+        return -p_smaller_itv(n=n, mu=mu / frac, frac=frac)
 
 
 ##
-# Old slow implementation. Not sure it works actually..
+# Alternate implementation as a full hawk
+# use only for testing; it's just slower than YellinCNHawk!
 ##
 
 
 @export
-class OptItvOneCut(hypney.Statistic):
+class YellinCN(hypney.Statistic):
     """Computes - C_n(x, mu) for one interval
 
     Here, C_n(x, mu) is the probability of finding a largest N-event-containing
@@ -65,23 +90,31 @@ class OptItvOneCut(hypney.Statistic):
     given the true rate mu.
     """
 
-    # TODO For some reason we get a recursion error when overriding init
-    # as we call super().__init___..
-    def _init_data(self, *args, **kwargs):
-        # We use cut_efficiency in the computations below
-        assert isinstance(self.model, hypney.models.CutModel)
-
     def _compute(self, params):
         assert self.model._backend_name == "numpy"
 
-        # Get original rate after cuts... not very clean
-        # TODO: this won't vectorize / autodiff!!
-        mu = hypney.utils.eagerpy.ensure_float(self.model._orig_model._rate(params))
+        mu = self.model.rate(params)
         n = len(self.data)
+
+        assert isinstance(self.model, hypney.models.CutModel)
         frac = self.model.cut_efficiency(params)
 
         # Minus, since deficit hawks take the minimum over cuts
-        return -p_smaller_itv(mu, n, frac)
+        result = -p_smaller_itv(n=n, mu=mu / frac, frac=frac)
+        return result
+
+
+@export
+class YellinCNFullHawk(AllRegionFullHawk):
+
+    statistic_class = YellinCN
+
+    def _dist_params(self, params):
+        # Distribution depends only on # expected events in the region
+        return dict(mu=self.model._rate(params))
+
+
+# Not really needed but useful for testing
 
 
 @hypney.utils.numba.maybe_jit
@@ -95,13 +128,3 @@ def p_smaller_x_0(mu, frac):
     return (
         (ks * x - mu) ** ks * np.exp(-ks * x) / factorial(ks) * (1 + ks / (mu - ks * x))
     ).sum()
-
-
-@export
-class YellinOptItvSlow(AllRegionFullHawk):
-
-    statistic_class = OptItvOneCut
-
-    def _dist_params(self, params):
-        # Distribution depends only on # expected events in the region
-        return dict(mu=self.model._rate(params))
