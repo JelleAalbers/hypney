@@ -55,6 +55,20 @@ class AssociativeCombination(hypney.Model):
                 for pname_in_model, pname_in_mixture in param_map
             }
 
+    def stack_axis0(self, xs):
+        """Stack list of results from low-level methods along axis=0
+
+        xs are broadcasted to whichever has the largest number of dimensions.
+
+        (One model may use tensor-valued params, while another has no params;
+         this causes some elements to have/lack extra batch_size dimensions)
+
+        TODO: this needs more testing, plenty of edge cases possible...
+        """
+        argmax = max(range(len(xs)), key=lambda i: len(xs[i].shape))
+        y = [hypney.utils.eagerpy.broadcast_to(x, xs[argmax].shape) for x in xs]
+        return ep.stack(y, axis=0)
+
 
 @export
 class Mixture(AssociativeCombination):
@@ -175,27 +189,6 @@ class Mixture(AssociativeCombination):
         mus = self._rate_per_model(params)
         return mus / mus.sum(axis=0)
 
-    def stack_axis0(self, xs):
-        """Stack list of results from low-level methods along axis=0
-
-        Prepends one-size dimensions until dimensionality matches.
-
-        A match is not guaranteed because we call low-level methods without
-        the shape harmonization in _scalar_/_tensor_method.
-            (One model may use tensor-valued params, while another has no params;
-             this causes some elements to have extra ones / batch_size dimensions)
-
-        TODO: this needs more testing, plenty of edge cases possible...
-        """
-        max_ndim = max([len(x.shape) for x in xs])
-        y = []
-        for x in xs:
-            # Append ones if shape does not match
-            while len(x.shape) < max_ndim:
-                x = x[None, ...]
-            y.append(x)
-        return ep.stack(y, axis=0)
-
 
 @export
 class TensorProduct(AssociativeCombination):
@@ -238,26 +231,19 @@ class TensorProduct(AssociativeCombination):
 
     def _logpdf(self, params: dict):
         return ep.sum(
-            ep.stack(
-                [m._logpdf(ps) for m, ps in self._iter_models_params(params)], axis=0
-            ),
-            axis=0,
+            self.stack_axis0(
+                [m._logpdf(ps) for m, ps in self._iter_models_params(params)]
+            )
         )
 
     def _pdf(self, params: dict):
         return ep.prod(
-            ep.stack(
-                [m._pdf(ps) for m, ps in self._iter_models_params(params)], axis=0
-            ),
-            axis=0,
+            self.stack_axis0([m._pdf(ps) for m, ps in self._iter_models_params(params)])
         )
 
     def _cdf(self, params: dict):
         return ep.prod(
-            ep.stack(
-                [m._cdf(ps) for m, ps in self._iter_models_params(params)], axis=0
-            ),
-            axis=0,
+            self.stack_axis0([m._cdf(ps) for m, ps in self._iter_models_params(params)])
         )
 
     def _ppf(self, params: dict) -> ep.TensorType:

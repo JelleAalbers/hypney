@@ -21,6 +21,14 @@ def test_mixture():
             mix.cdf(data=[0.0, 0.5, 1.0]), np.array([0.0, 0.5, 1.0])
         )
 
+        # Test vectorization
+        rates = np.linspace(1, 2, 10)
+        pname = mix.param_specs[0].name  # Changes w free/frozen
+        np.testing.assert_almost_equal(
+            mix.pdf(0, params={pname: rates}),
+            [mix.pdf(0, params={pname: rate}) for rate in rates],
+        )
+
         assert mix.simulate().shape[0] > 0
         assert mix.rvs(size=50).shape[0] > 0
 
@@ -34,11 +42,11 @@ def test_mixture():
         mix4 = m1 + m2 + m3
         assert mix4.diff_rate(data=0) == 90.0
 
-        # Test mean and std
-        mix = hypney.models.norm() + hypney.models.uniform(loc=5, scale=2)
-        data = mix.rvs(100_000)
-        np.testing.assert_allclose(mix.mean(), data.mean(), rtol=0.05)
-        np.testing.assert_allclose(mix.std(), data.std(), rtol=0.05)
+    # Test mean and std
+    mix = hypney.models.norm() + hypney.models.uniform(loc=5, scale=2)
+    data = mix.rvs(100_000)
+    np.testing.assert_allclose(mix.mean(), data.mean(), rtol=0.05)
+    np.testing.assert_allclose(mix.std(), data.std(), rtol=0.05)
 
     # Test parameter after renaming
     mix = m1 + m2_free
@@ -56,13 +64,6 @@ def test_mixture():
     assert "scale_1" not in m_shared.param_names
     assert "scale_2" not in m_shared.param_names
     assert m_shared(scale=2).pdf(2) == 0.5 * (m1 + m2 + m3).pdf(1)
-
-    # Test vectorization
-    m = hypney.models.mixture(
-        hypney.models.norm(), hypney.models.norm().shift(1), share="loc"
-    )
-    locs = np.linspace(0, 2, 10)
-    np.testing.assert_almost_equal(m.pdf(0, loc=locs), [m.pdf(0, loc=x) for x in locs])
 
 
 def test_tensor_product():
