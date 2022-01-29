@@ -115,10 +115,14 @@ class ConfidenceInterval:
             if self._ppf_interpolation:
                 x, y = self.anchors, self.crit_at_anchors
                 if self._ppf_interpolation == "linear":
-                    self._ppf_pre_fudge = interpolate.interp1d(x, y)
+                    self._ppf_pre_fudge = _select_poi(
+                        interpolate.interp1d(x, y), self.poi, self.stat.model
+                    )
                 elif self._ppf_interpolation == "loglog":
-                    self._ppf_pre_fudge = hypney.utils.interpolation.interp1d_loglog(
-                        x, y
+                    self._ppf_pre_fudge = _select_poi(
+                        hypney.utils.interpolation.interp1d_loglog(x, y),
+                        self.poi,
+                        self.stat.model,
                     )
                 else:
                     raise ValueError(
@@ -234,3 +238,20 @@ class CentralInterval:
 
     def __call__(self, data=hypney.NotChanged):
         return self._lower(data), self._upper(data)
+
+
+def _select_poi(f, poi, model):
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        # params = model.validate_params(*args, **kwargs)
+        if poi in kwargs:
+            x = kwargs[poi]
+        elif "params" in kwargs:
+            x = kwargs["params"][poi]
+        else:
+            raise ValueError("Can't find POI.. :-(")
+        x = hypney.utils.eagerpy.ensure_numpy(x)
+        y = f(x)
+        return y
+
+    return wrapped
