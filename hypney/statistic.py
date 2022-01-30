@@ -148,6 +148,7 @@ class Statistic:
         params=NotChanged,
         transform=np.asarray,
         nan_on_exception=False,
+        simulate_from_model=None,
         **kwargs,
     ) -> np.ndarray:
         """Return statistic evaluated on simulated data,
@@ -159,13 +160,20 @@ class Statistic:
          - transform: run numpy data through this function before passing
             it to statistic. Useful to convert to an autograd library,
             e.g. torch.from_numpy / tf.convert_to_tensor.
+         - simulate_from_model: alternate model to simulate data from,
+            if different from the model the statistic uses for evaluation.
         """
+        if simulate_from_model is None:
+            simulate_from_model = self.model
+
         # Set defaults once to avoid re-validation
         self = self.set(params=params, **kwargs)
 
         results = np.zeros(size)
         for i in range(size):
-            sim_data = transform(self.model._simulate(params=self.model.defaults))
+            sim_data = transform(
+                simulate_from_model._simulate(params=self.model.defaults)
+            )
             if nan_on_exception:
                 try:
                     results[i] = self.compute(data=sim_data)
@@ -191,6 +199,7 @@ class Statistic:
         transform=np.asarray,
         options=None,
         nan_on_exception=False,
+        simulate_from_model=None,
         **kwargs,
     ):
         """Return an estimated distribution of the statistic given params
@@ -206,20 +215,41 @@ class Statistic:
 
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
         self = self.set(params=params, **kwargs)
-        toys = self.rvs(n_toys, transform=transform, nan_on_exception=nan_on_exception)
+        toys = self.rvs(
+            n_toys,
+            simulate_from_model=simulate_from_model,
+            transform=transform,
+            nan_on_exception=nan_on_exception,
+        )
 
         dist = hypney.models.from_samples(toys, **options)
         # Remove all parameters (to avoid confusion with model parameters)
         return dist.freeze()
 
     def interpolate_dist_from_toys(
-        self, anchors: dict, progress=True, methods="ppf", map=map, **kwargs
+        self,
+        anchors: dict,
+        progress=True,
+        methods="ppf",
+        map=map,
+        simulate_from_model=None,
+        **kwargs,
     ):
         """Estimate this statistic's distribution by Monte Carlo.
 
         This draws toys at a grid specified by the anchors.
         By default, we then interpolate the ppf, since this is what you need
         for confidence interval setting.
+
+        Arguments:
+         - anchors: dict {param_name: anchor_values} of parameter values at
+            which to run dist_from_toys. For multiple parameter, a grid is built
+         - map: map function for task distribution. Can use e.g.
+            ProcessPoolExecutor.map instead of the default map.
+         - simulate_from_model: alternate model to simulate toys from,
+            if different form the model the statistic uses in calculations.
+         - progress: whether to show a progress bar
+         - methods: which distribution methods to interpolate
         """
         assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
 
@@ -278,6 +308,7 @@ class Statistic:
         n_toys=None,
         rate_anchors=hypney.DEFAULT_RATE_GRID,
         max_workers=None,
+        build_if_not_found=True,
         dist_dir="cached_dists",
     ):
         """Return statistic with distribution loaded from cache_dir,
@@ -289,6 +320,7 @@ class Statistic:
             n_toys = 10_000
         if max_workers is None:
             max_workers = min(32, os.cpu_count() - 4)
+        rate_anchors = list(rate_anchors)
 
         dist_dir = Path(f"./{dist_dir}/")
         dist_dir.mkdir(exist_ok=True)
@@ -298,6 +330,9 @@ class Statistic:
             with gzip.open(dist_filename) as f:
                 return self.set(dist=pickle.load(f))
 
+        elif not build_if_not_found:
+            raise FileNotFoundError(f"No cached distribution at {dist_filename}")
+
         else:
             mu_min, mu_max = [f(rate_anchors) for f in (min, max)]
             print(
@@ -306,9 +341,7 @@ class Statistic:
             )
             with ProcessPoolExecutor(max_workers=max_workers) as exc:
                 dist = self.interpolate_dist_from_toys(
-                    anchors=dict(rate=hypney.DEFAULT_RATE_GRID.tolist()),
-                    n_toys=n_toys,
-                    map=exc.map,
+                    anchors=dict(rate=rate_anchors), n_toys=n_toys, map=exc.map,
                 )
             with gzip.open(dist_filename, mode="wb") as f:
                 pickle.dump(dist, f)
