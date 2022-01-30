@@ -4,6 +4,7 @@ i.e. the original optimum interval method.
 """
 import gzip
 import pickle
+from pathlib import Path
 
 import numpy as np
 import multihist  # pickle contains a multihist
@@ -17,25 +18,29 @@ export, __all__ = hypney.exporter()
 
 
 # TODO: where to store file in repo?
-with gzip.open(
-    "/home/jaalbers/Documents/projects/robust_inference_2/cn_cdf.pkl.gz"
-) as f:
-    mh = pickle.load(f)
+cn_cdf_file = "/home/jaalbers/Documents/projects/robust_inference_2/cn_cdf.pkl.gz"
 
-# Pad with zero at frac = 0
-cdfs = np.pad(mh.histogram, [(0, 0), (0, 0), (1, 0)])
+if Path(cn_cdf_file).exists():
+    with gzip.open(cn_cdf_file) as f:
+        mh = pickle.load(f)
 
-points = mh.bin_centers()
-# We cumulated along the 'frac' dimension; values represent
-# P(frac <= right bin edge)
-points[2] = np.concatenate([[0], mh.bin_edges[2][1:]])
+    # Pad with zero at frac = 0
+    cdfs = np.pad(mh.histogram, [(0, 0), (0, 0), (1, 0)])
 
-# Full intervals (frac = 1) should not always score 1.
-# Linearly interpolate the last cdf bin instead:
-cdfs[:, :, -1] = (cdfs[:, :, -2] + (cdfs[:, :, -2] - cdfs[:, :, -3])).clip(0, 1)
+    points = mh.bin_centers()
+    # We cumulated along the 'frac' dimension; values represent
+    # P(frac <= right bin edge)
+    points[2] = np.concatenate([[0], mh.bin_edges[2][1:]])
 
-p_smaller_x_itp = RegularGridInterpolator(points, cdfs)
-itp_max_mu = mh.bin_centers("mu").max()
+    # Full intervals (frac = 1) should not always score 1.
+    # Linearly interpolate the last cdf bin instead:
+    cdfs[:, :, -1] = (cdfs[:, :, -2] + (cdfs[:, :, -2] - cdfs[:, :, -3])).clip(0, 1)
+
+    p_smaller_x_itp = RegularGridInterpolator(points, cdfs, bounds_error=False)
+    itp_max_mu = mh.bin_centers("mu").max()
+
+else:
+    p_smaller_x_itp = None
 
 
 @export
@@ -48,6 +53,10 @@ def p_smaller_itv(n, mu, frac):
      - mu: *total* expected events (not expected event in interval!)
      - frac: fraction of events expected in interval
     """
+    if p_smaller_x_itp is None:
+        raise FileNotFoundError(
+            f"CN distribution file {cn_cdf_file} not found, cannot compute p_smaller_itv"
+        )
     # I'm assuming mu has the largest shape. Ravel may be inefficient but
     # I think RegularGridInterpolator won't work without it
     # TODO: eagerpy-ify this.
