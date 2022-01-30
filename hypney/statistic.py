@@ -232,7 +232,6 @@ class Statistic:
         progress=True,
         methods="ppf",
         map=map,
-        simulate_from_model=None,
         **kwargs,
     ):
         """Estimate this statistic's distribution by Monte Carlo.
@@ -246,8 +245,6 @@ class Statistic:
             which to run dist_from_toys. For multiple parameter, a grid is built
          - map: map function for task distribution. Can use e.g.
             ProcessPoolExecutor.map instead of the default map.
-         - simulate_from_model: alternate model to simulate toys from,
-            if different form the model the statistic uses in calculations.
          - progress: whether to show a progress bar
          - methods: which distribution methods to interpolate
         """
@@ -310,6 +307,7 @@ class Statistic:
         max_workers=None,
         build_if_not_found=True,
         dist_dir="cached_dists",
+        **kwargs,
     ):
         """Return statistic with distribution loaded from cache_dir,
         or rebuilt from toy mc if file does not exist
@@ -342,6 +340,7 @@ class Statistic:
             with ProcessPoolExecutor(max_workers=max_workers) as exc:
                 dist = self.interpolate_dist_from_toys(
                     anchors=dict(rate=rate_anchors), n_toys=n_toys, map=exc.map,
+                    **kwargs
                 )
             with gzip.open(dist_filename, mode="wb") as f:
                 pickle.dump(dist, f)
