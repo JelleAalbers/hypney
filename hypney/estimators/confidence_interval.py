@@ -1,4 +1,4 @@
-from functools import partial
+import functools
 import numpy as np
 from scipy import optimize, interpolate
 
@@ -143,7 +143,7 @@ class ConfidenceInterval:
 
         # Evaluate statistic at anchors
         # (statistic is vectorized over params)
-        anchor_pars = {self.poi: stat.model._to_tensor(self.anchors).raw}
+        anchor_pars = {self.poi: np.asarray(self.anchors)}
         stat_at_anchors = stat.compute(params=anchor_pars)
 
         if self.use_cdf:
@@ -204,7 +204,7 @@ class ConfidenceInterval:
         offset = self.sign * 1e-9 * (crit_minus_stat[ileft] - crit_minus_stat[iright])
 
         return optimize.brentq(
-            partial(self._objective, stat=stat, offset=offset),
+            functools.partial(self._objective, stat=stat, offset=offset),
             self.anchors[ileft],
             self.anchors[iright],
         )

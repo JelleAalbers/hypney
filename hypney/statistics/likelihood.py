@@ -89,9 +89,7 @@ class PLROrZero(PLR):
     def _compute(self, params):
         result = super()._compute(params)
         saw_high = params[self.only_poi] > self.bestfit[self.only_poi]
-        if saw_high == (self.zero_if == "high"):
-            return 0
-        return result
+        return ep.where(saw_high == (self.zero_if == "high"), 0, result)
 
     def _build_dist(self):
         return self._constant_dist(
@@ -103,12 +101,13 @@ class PLROrZero(PLR):
 class SignedPLR(PLR):
     def _compute(self, params):
         result = super()._compute(params)
-        if self.bestfit[self.only_poi] > params[self.only_poi]:
+        return ep.where(
+            self.bestfit[self.only_poi] > params[self.only_poi],
             # Excess-like result: positive
-            return result
-        else:
+            result,
             # Deficit-like result: negative
-            return -result
+            -result,
+        )
 
     def _build_dist(self):
         half_chi2 = hypney.models.chi2(df=1, rate=0.5)

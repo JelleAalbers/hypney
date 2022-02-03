@@ -145,8 +145,10 @@ class FullHawk(DeficitHawk):
 
     def _score_cuts(self, params):
         # (n_cuts, {batch_shape})
+        # TODO: why is _to_tensor needed here? Shouldn't _compute already
+        # return eagerpy tensors?
         result = ep.stack(
-            self.model._to_tensor([stat._compute(params) for stat in self.cut_stats])
+            [self.model._to_tensor(stat._compute(params)) for stat in self.cut_stats]
         )
         assert result.shape[1:] == self.model._batch_shape(params)
         return result

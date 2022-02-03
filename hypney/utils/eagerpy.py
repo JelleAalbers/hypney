@@ -118,7 +118,9 @@ def split(x, *args, **kwargs):
 
 @export
 def broadcast_to(x, shape):
-    return tensorlib(x).broadcast_to(x.raw, shape)
+    return x.zeros(shape) + x
+    # Slower due to eagerpy overhead
+    # return tensorlib(x).broadcast_to(x.raw, shape)
 
 
 @export

@@ -227,12 +227,7 @@ class Statistic:
         return dist.freeze()
 
     def interpolate_dist_from_toys(
-        self,
-        anchors: dict,
-        progress=True,
-        methods="ppf",
-        map=map,
-        **kwargs,
+        self, anchors: dict, progress=True, methods="ppf", map=map, **kwargs,
     ):
         """Estimate this statistic's distribution by Monte Carlo.
 
@@ -250,18 +245,21 @@ class Statistic:
         """
         assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
 
-        if self._has_redefined("_dist_params"):
+        if not self._has_redefined("_dist_params"):
+            model_builder = functools.partial(self.dist_from_toys, **kwargs)
+            anchors = anchors
+        else:
             # Build a distribution that takes the _dist_params
             # rather than the model's params.
 
-            # Compute new anchors using self._dist_params
+            # Compute anchors transformed by self._dist_params
             if len(anchors) > 1:
                 raise NotImplementedError(
                     "Multi-parameter interpolation not supported if _dist_params is nontrivial"
                 )
                 # (Since we'd have to transform the whole grid of anchors.
                 #  Even if the transformation is simple enough to allow this,
-                #  we don't have that grid here yet
+                #  we don't have that grid here yet)
             # (back and forth to tensor necessary to support dist_params that
             #  do calls -- e.g. Count's dist calls to model._rate)
             param_tensors = {k: self.model._to_tensor(v) for k, v in anchors.items()}
@@ -272,28 +270,24 @@ class Statistic:
             # from old (model) to new (dist) anchors
             dist_pname = list(dist_anchors.keys())[0]
             model_pname = list(anchors.keys())[0]
-
-            model_to_dist_anchor = dict(
-                zip(tuple(anchors[model_pname]), dist_anchors[dist_pname])
+            dist_to_model_anchor = dict(
+                zip(dist_anchors[dist_pname], tuple(anchors[model_pname]))
             )
 
-            # The interpolator will work in the new (dist) anchors
-            # Thus model_builder must transform back to the old (model) anchors
-            # We cannot define the function here inline, that would break pickle
+            # The interpolator will accept the new (dist) anchors
+            # To know which model to place where, model_builder must transform
+            # from the new (dist) anchors back to the old (model) anchors.
+            # (Cannot inline _transformed_model_builder, would break pickle.)
+            anchors = dist_anchors
             model_builder = functools.partial(
                 _transformed_model_builder,
                 self=self,
                 model_pname=model_pname,
                 dist_pname=dist_pname,
-                model_to_dist_anchor=model_to_dist_anchor,
+                dist_to_model_anchor=dist_to_model_anchor,
+                #model_to_dist_anchor=model_to_dist_anchor,
                 **kwargs,
             )
-
-            anchors = dist_anchors
-
-        else:
-            model_builder = functools.partial(self.dist_from_toys, **kwargs)
-            anchors = anchors
 
         return hypney.models.Interpolation(
             model_builder, anchors, progress=progress, map=map, methods=methods,
@@ -337,10 +331,17 @@ class Statistic:
                 f"Building distribution {dist_filename}, {n_toys} toys,"
                 f"mu in [{mu_min}, {mu_max}]"
             )
-            with ProcessPoolExecutor(max_workers=max_workers) as exc:
+            if max_workers > 1:
+                with ProcessPoolExecutor(max_workers=max_workers) as exc:
+                    dist = self.interpolate_dist_from_toys(
+                        anchors=dict(rate=rate_anchors),
+                        n_toys=n_toys,
+                        map=exc.map,
+                        **kwargs,
+                    )
+            else:
                 dist = self.interpolate_dist_from_toys(
-                    anchors=dict(rate=rate_anchors), n_toys=n_toys, map=exc.map,
-                    **kwargs
+                    anchors=dict(rate=rate_anchors), n_toys=n_toys, **kwargs
                 )
             with gzip.open(dist_filename, mode="wb") as f:
                 pickle.dump(dist, f)
@@ -348,7 +349,7 @@ class Statistic:
 
 
 def _transformed_model_builder(
-    dist_params, *, self, model_pname, dist_pname, model_to_dist_anchor, **kwargs
+    dist_params, *, self, model_pname, dist_pname, dist_to_model_anchor, **kwargs
 ):
-    model_params = {model_pname: model_to_dist_anchor[dist_params[dist_pname]]}
+    model_params = {model_pname: dist_to_model_anchor[dist_params[dist_pname]]}
     return self.dist_from_toys(params=model_params, **kwargs)

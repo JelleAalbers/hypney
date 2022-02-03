@@ -67,7 +67,11 @@ def p_smaller_itv(n, mu, frac):
     frac = np.asarray(0 * mu + frac)
 
     points = np.stack([mu.ravel(), n.ravel(), frac.ravel()]).T
-    result = p_smaller_x_itp(points)
+    try:
+        result = p_smaller_x_itp(points)
+    except ValueError:
+        print(f"Error interpolating at {points}, mu={mu}, n={n}, frac={frac}")
+        raise
     result = result.reshape(mu.shape)
     if was_float:
         return result.item()

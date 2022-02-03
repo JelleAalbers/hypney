@@ -116,14 +116,20 @@ def test_pn_vectorization():
     for stat_class in [hp.PNAllRegionHawkSlow, hp.PNAllRegionHawk]:
         print(stat_class)
         stat = stat_class(model, data=toy_data)
+        y = stat.compute(rate=rates)
+        assert isinstance(y, np.ndarray)
+        assert isinstance(y[0], float)
         np.testing.assert_array_equal(
-            stat.compute(rate=rates), np.array([stat.compute(rate=r) for r in rates])
+            y, np.array([stat.compute(rate=r) for r in rates])
         )
 
     for stat_class in [hp.PNFixedRegionHawkSlow, hp.PNFixedRegionHawk]:
         print(stat_class)
         cuts = [(0.0, 1.0), (0.5, 1), (0.1, 0.3)]
         stat = stat_class(model, cuts=cuts, data=toy_data)
+        y = stat.compute(rate=rates)
+        assert isinstance(y, np.ndarray)
+        assert isinstance(y[0], float)
         np.testing.assert_array_equal(
-            stat.compute(rate=rates), np.array([stat.compute(rate=r) for r in rates])
+            y, np.array([stat.compute(rate=r) for r in rates])
         )
