@@ -14,8 +14,8 @@ export, __all__ = hypney.exporter()
 class Interpolation(hypney.Model):
     """Model which interpolates other models, depending on parameters.
 
-    The pdf, cdf and ppf are linearly interpolated. You should only
-    use one of these; the other two will generally be inconsistent!
+    You should only use one of pdf/cdf/ppf at a time;
+    the others will be inconsistent!
     """
 
     data_methods_to_interpolate = "pdf logpdf cdf diff_rate".split()
@@ -201,6 +201,8 @@ class Interpolation(hypney.Model):
         if anchor not in self.anchor_models:
             raise NotImplementedError("Can only simulate at anchor models")
         return self.anchor_models[anchor]._simulate(params)
+
+    # TODO min/max. Take min/max over anchors
 
 
 for method_name in (

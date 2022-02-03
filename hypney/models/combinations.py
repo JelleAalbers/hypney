@@ -55,7 +55,8 @@ class AssociativeCombination(hypney.Model):
                 for pname_in_model, pname_in_mixture in param_map
             }
 
-    def stack_axis0(self, xs):
+    @staticmethod
+    def stack_axis0(xs):
         """Stack list of results from low-level methods along axis=0
 
         xs are broadcasted to whichever has the largest number of dimensions.
@@ -163,13 +164,21 @@ class Mixture(AssociativeCombination):
         var = ep.sum(ps * (s2s + means ** 2), axis=0) - ep.sum(ps * means, axis=0) ** 2
         return var ** 0.5
 
+    def _min(self, params):
+        supports = self._support_per_model(params)
+        return supports[:, 0, ...].min(axis=0)
+
+    def _max(self, params):
+        supports = self._support_per_model(params)
+        return supports[:, 1, ...].max(axis=0)
+
     ##
     # Helpers
     ##
 
     def _rate_per_model(self, params: dict) -> ep.TensorType:
-        # This will give (n_models, {expanded_batch_shape}) because params
-        # should be in expanded batch shape.
+        # This will give (n_models, {expanded_batch_shape})
+        # (assuming params is in expanded batch shape)
         return self.stack_axis0(
             [m._rate(ps) for m, ps in self._iter_models_params(params)]
         )
@@ -185,9 +194,18 @@ class Mixture(AssociativeCombination):
         )
 
     def _f_per_model(self, params):
-        # (n_models, {expanded_batch_shape})
         mus = self._rate_per_model(params)
         return mus / mus.sum(axis=0)
+
+    def _support_per_model(self, params: dict):
+        # (n_models, 2, {expanded_batch_shape})
+        assert self.n_dim == 1, "Support methods work for univariate dists"
+        return self.stack_axis0(
+            [
+                ep.stack([m._min(params=ps), m._max(params=ps)], axis=0)
+                for m, ps in self._iter_models_params(params)
+            ]
+        )
 
 
 @export

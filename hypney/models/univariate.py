@@ -32,7 +32,7 @@ class UnivariateDistribution(hypney.Model):
 
     def _dist_params(self, params):
         # Extract raw tensor, and remove rate parameter
-        # (scipy dists have no such concept)
+        # (scipy/tf/torch dists have no such concept)
         return {
             k: v.raw for k, v in params.items() if k != hypney.DEFAULT_RATE_PARAM.name
         }
@@ -129,6 +129,20 @@ class UnivariateDistribution(hypney.Model):
 
     def _std(self, params):
         return self._to_tensor(self.dist_for_data().std(**self._dist_params(params)))
+
+    def _min(self, params):
+        return self._support(params)[0]
+
+    def _max(self, params):
+        return self._support(params)[1]
+
+    def _support(self, params):
+        # TODO: tf/torch etc do have support methods, but they are a bit different
+        dist_params = {
+            k: hypney.utils.eagerpy.ensure_numpy(v)
+            for k, v in self._dist_params(params).items()
+        }
+        return self._to_tensor(self._dists["scipy"].support(**dist_params))
 
 
 class UnivariateDiscreteDistribution(UnivariateDistribution):

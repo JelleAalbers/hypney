@@ -9,8 +9,8 @@ class TransformedDataModel(hypney.WrappedModel):
 
     Args (beyond those of Model):
      - orig_model: original model
-     - shift: constant to add to data
-     - scale: constant to multiply shifted data
+     - shift: constant added to data
+     - scale: constant by which shifted data is multiplied
     """
 
     shift = 0.0
@@ -91,3 +91,9 @@ class TransformedDataModel(hypney.WrappedModel):
 
     def _std(self, params: dict):
         return self._orig_model._std(params) * self.scale
+
+    def _min(self, params: dict):
+        return self.shift + self._orig_model._min(params) * self.scale
+
+    def _max(self, params: dict):
+        return self.shift + self._orig_model._max(params) * self.scale

@@ -1,5 +1,6 @@
 import itertools
 import math
+import typing as ty
 
 import hypney
 
@@ -29,7 +30,7 @@ class CutModel(hypney.WrappedModel):
 
     # TODO: add docs warning about not autocutting data
 
-    _cut = NoCut  # .cut is a model Method
+    _cut: ty.Any = NoCut  # .cut is a model Method
     _passes_cut: ep.Tensor
     _fixed_eff = None
 
@@ -57,6 +58,8 @@ class CutModel(hypney.WrappedModel):
             )
 
         # TODO: sneaking an arg to _init_data...
+        # TODO: this is bad. cut_data only works on first init..
+        # I can see this is a nice optimization, but not what people expect
         self._cut_data = cut_data
         super().__init__(orig_model=orig_model, *args, **kwargs)
         self._cut_data = False
@@ -254,3 +257,15 @@ class CutModel(hypney.WrappedModel):
         )
 
         return result
+
+    def _min(self, params: dict):
+        assert self.n_dim == 1, "Support methods assume univariate dists"
+        return hypney.utils.misc.flexible_clip(
+            self._orig_model.min(params=params), self._cut[0][0]
+        )
+
+    def _max(self, params: dict):
+        assert self.n_dim == 1, "Support methods assume univariate dists"
+        return hypney.utils.misc.flexible_clip(
+            self._orig_model.max(params=params), None, self._cut[0][1]
+        )

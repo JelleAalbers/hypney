@@ -79,5 +79,5 @@ def _wrapped_method(method_name):
     return wrapped
 
 
-for method_name in "_logpdf _pdf _cdf _ppf _mean _rate _std".split():
+for method_name in "_logpdf _pdf _cdf _ppf _mean _rate _std _min _max".split():
     setattr(Reparametrized, method_name, _wrapped_method(method_name))

@@ -381,10 +381,15 @@ class Model:
 
     def _to_common_shape(self, params):
         """Return params reshaped to a common batch shape"""
+        if len(params) <= 1:
+            return params
         # Find a common batch shape.
         # Walk through shapes from right to left, taking max() of dimsizes,
         # and taking 1 for missing entries.
         param_shapes_rev = [tuple(reversed(x.shape)) for x in params.values()]
+        if all([x == param_shapes_rev[0] for x in param_shapes_rev]):
+            # Already agree on shape
+            return params
         batch_shape = tuple(
             reversed(
                 [max(x) for x in itertools.zip_longest(*param_shapes_rev, fillvalue=1)]
@@ -648,6 +653,15 @@ class Model:
     def std(self, params: dict = None, **kwargs) -> float:
         return self._scalar_method(self._std, params, **kwargs)
 
+    def min(self, params: dict = None, **kwargs) -> float:
+        return self._scalar_method(self._min, params, **kwargs)
+
+    def max(self, params: dict = None, **kwargs) -> float:
+        return self._scalar_method(self._max, params, **kwargs)
+
+    def support(self, params: dict = None, **kwargs) -> float:
+        return self.min(params, **kwargs), self.max(params, **kwargs)
+
     # Internal functions
 
     def _rate(self, params: dict):
@@ -663,6 +677,12 @@ class Model:
         return self._std(params) ** 2
 
     def _std(self, params: dict):
+        raise NotImplementedError
+
+    def _min(self, params: dict):
+        raise NotImplementedError
+
+    def _max(self, params: dict):
         raise NotImplementedError
 
     ##
