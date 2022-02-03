@@ -267,7 +267,7 @@ class Statistic:
             dist_anchors = {k: v.numpy().tolist() for k, v in dist_anchors.items()}
 
             # Set up transformation dictionary
-            # from old (model) to new (dist) anchors
+            # from new (dist) to old (model) anchors
             dist_pname = list(dist_anchors.keys())[0]
             model_pname = list(anchors.keys())[0]
             dist_to_model_anchor = dict(
@@ -285,7 +285,6 @@ class Statistic:
                 model_pname=model_pname,
                 dist_pname=dist_pname,
                 dist_to_model_anchor=dist_to_model_anchor,
-                #model_to_dist_anchor=model_to_dist_anchor,
                 **kwargs,
             )
 

@@ -115,6 +115,10 @@ class SimpleHawk(DeficitHawk):
     def _get_cached_acceptance(self, params=None):
         return self._cached_acceptance
 
+    def _dist_params(self, params):
+        # Distribution depends only on # expected events
+        return dict(mu=self.model._rate(params))
+
 
 @export
 class FullHawk(DeficitHawk):

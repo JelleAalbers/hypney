@@ -15,10 +15,6 @@ export, __all__ = hypney.exporter()
 
 @export
 class PNHawk:
-    def _dist_params(self, params):
-        # Distribution depends only on # expected events
-        return dict(mu=self.model._rate(params))
-
     def _compute_scores(self, n, mu, frac):
         return self.model._to_tensor(
             stats.poisson.cdf(n, mu=hypney.utils.eagerpy.ensure_numpy(mu))
@@ -35,7 +31,7 @@ class PNFixedRegionHawk(PNHawk, FixedRegionSimpleHawk):
     pass
 
 
-# Alternate implementation via Full hawk. Should be much slower!
+# Alternate implementation via Full hawk. Much slower; only useful for tests!
 
 
 @export
@@ -64,7 +60,7 @@ class PNFixedRegionHawkSlow(FixedRegionFullHawk):
     statistic_class = PNOneCut
 
     def _dist_params(self, params):
-        # Distribution depends only on # expected events in the region
+        # Distribution depends only on # expected events
         return dict(mu=self.model._rate(params))
 
 
@@ -74,5 +70,5 @@ class PNAllRegionHawkSlow(AllRegionFullHawk):
     statistic_class = PNOneCut
 
     def _dist_params(self, params):
-        # Distribution depends only on # expected events in the region
+        # Distribution depends only on # expected events
         return dict(mu=self.model._rate(params))
