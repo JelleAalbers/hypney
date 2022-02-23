@@ -19,7 +19,9 @@ class DeficitHawk(hypney.Statistic):
     _cached_acceptance = itertools.repeat(None)
 
     def __init__(self, *args, signal_only=None, **kwargs):
-        self.signal_only = self._signal_only_default
+        if signal_only is None:
+            signal_only = self._signal_only_default
+        self.signal_only = signal_only
         super().__init__(*args, **kwargs)
         assert (
             len(self.model.param_names) == 1
@@ -68,8 +70,6 @@ class SimpleHawk(DeficitHawk):
     Defaults to signed likelihood ratio assuming no background
     """
 
-    _signal_only_default = True
-
     _observed: np.ndarray = None
 
     def _init_cut_stats(self):
@@ -101,8 +101,8 @@ class SimpleHawk(DeficitHawk):
         # ({batch_shape}, n_cuts)
         result = self._compute_scores(n=self._observed, mu=mu, frac=frac)
         assert result.shape == mu.shape
-        # (n_cuts, {batch_shape})
         axis_order = tuple(np.roll(np.arange(len(result.shape)), 1).tolist())
+        # (n_cuts, {batch_shape})
         return result.transpose(axis_order)
 
     def _cut_info(self, cut_i):
