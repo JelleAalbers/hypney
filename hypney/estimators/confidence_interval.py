@@ -197,11 +197,17 @@ class ConfidenceInterval:
             ileft = iright - 1
 
         # Find zero of (crit - stat) - tiny_offset
-        # The offset is needed if crit = stat for an extended length
-        # e.g. for Count or other discrete-valued statistics.
+        # The offset is needed if crit = stat exactly for an extended length
+        #   e.g. for Count or other discrete-valued statistics;
+        #   the upper limit should be just where the statistic takes off from 0.
         # TODO: can we use grad? optimize.root takes a jac arg...
         # Don't ask about the sign. All four side/sign combinations are tested...
-        offset = self.sign * 1e-9 * (crit_minus_stat[ileft] - crit_minus_stat[iright])
+        diff = crit_minus_stat[ileft] - crit_minus_stat[iright]
+        offset = self.sign * min(1e-9, 1e-3 * np.abs(diff)) * diff
+        # Ensure the offset doesn't push the positive side below zero
+        # This would happen if the zero lies very close to an anchor.
+        positive = max(crit_minus_stat[ileft], crit_minus_stat[iright])
+        offset = max(offset, -positive / 10)
 
         return optimize.brentq(
             functools.partial(self._objective, stat=stat, offset=offset),
