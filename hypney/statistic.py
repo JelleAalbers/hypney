@@ -162,6 +162,8 @@ class Statistic:
             e.g. torch.from_numpy / tf.convert_to_tensor.
          - simulate_from_model: alternate model to simulate data from,
             if different from the model the statistic uses for evaluation.
+         - pass_params_to_sim_model: If True, pass any params and **kwargs
+            also to the model given in simulate_from_model.
         """
         if simulate_from_model is None:
             simulate_from_model = self.model
@@ -171,9 +173,7 @@ class Statistic:
 
         results = np.zeros(size)
         for i in range(size):
-            sim_data = transform(
-                simulate_from_model._simulate(params=self.model.defaults)
-            )
+            sim_data = transform(simulate_from_model.simulate())
             if nan_on_exception:
                 try:
                     results[i] = self.compute(data=sim_data)
@@ -200,6 +200,7 @@ class Statistic:
         options=None,
         nan_on_exception=False,
         simulate_from_model=None,
+        pass_params_to_sim_model=False,
         **kwargs,
     ):
         """Return an estimated distribution of the statistic given params
@@ -215,11 +216,17 @@ class Statistic:
 
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
         self = self.set(params=params, **kwargs)
+
+        if simulate_from_model is None:
+            simulate_from_model = self.model
+        if pass_params_to_sim_model:
+            simulate_from_model = simulate_from_model(params=params, **kwargs)
+
         toys = self.rvs(
             n_toys,
-            simulate_from_model=simulate_from_model,
             transform=transform,
             nan_on_exception=nan_on_exception,
+            simulate_from_model=simulate_from_model,
         )
 
         dist = hypney.models.from_samples(toys, **options)
@@ -242,8 +249,16 @@ class Statistic:
             ProcessPoolExecutor.map instead of the default map.
          - progress: whether to show a progress bar
          - methods: which distribution methods to interpolate
+         - simulate_from_model: alternate model to simulate toys from.
+            This will be passed the anchor parameters.
+
         """
         assert isinstance(anchors, dict), "Pass a dict of sequences as anchors"
+
+        # Without this, simulate_from_model would be the same at each anchor.
+        # Can't image why someone would want that, but allow it to be overriden
+        # anyway...
+        kwargs.setdefault("pass_params_to_sim_model", True)
 
         if not self._has_redefined("_dist_params"):
             model_builder = functools.partial(self.dist_from_toys, **kwargs)
