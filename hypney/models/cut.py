@@ -191,6 +191,8 @@ class CutModel(hypney.WrappedModel):
         return self.apply_cut(data=self._orig_model._simulate(params))
 
     def _rvs(self, size, params: dict) -> np.ndarray:
+        if size == 0:
+            return np.zeros((0, len(self.observables)))
         # Simulate an excess, enough that we almost always complete in one go
         n_needed = int(
             size

@@ -112,12 +112,12 @@ class UnivariateDistribution(hypney.Model):
         pdf = dist.pdf if hasattr(dist, "pdf") else dist.pmf
         return ep.astensor(pdf(self.data[..., 0].raw, **self._dist_params(params)))
 
-    def _cdf(self, params: dict) -> np.ndarray:
+    def _cdf(self, params: dict) -> ep.TensorType:
         return ep.astensor(
             self.dist_for_data().cdf(self.data[..., 0].raw, **self._dist_params(params))
         )
 
-    def _ppf(self, params: dict) -> np.ndarray:
+    def _ppf(self, params: dict) -> ep.TensorType:
         return ep.astensor(
             self.dist_for_data().ppf(self.quantiles.raw, **self._dist_params(params))
         )

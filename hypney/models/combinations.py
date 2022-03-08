@@ -97,13 +97,19 @@ class Mixture(AssociativeCombination):
         super()._init_data()
 
     def _rvs(self, size: int, params: dict) -> np.ndarray:
+        if size == 0:
+            return np.zeros((0, len(self.observables)))
         n_from = np.random.multinomial(size, self._f_per_model(params).numpy())
-        return np.concatenate(
+        result = np.concatenate(
             [
                 m._rvs(size=_n, params=ps)
                 for _n, (m, ps) in zip(n_from, self._iter_models_params(params))
             ]
         )
+        # Ensure event sources are mixed, do not just put all of the first
+        # in front of the array.
+        np.random.shuffle(result)
+        return result
 
     ##
     # Methods using data / quantiles

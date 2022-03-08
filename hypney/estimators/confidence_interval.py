@@ -82,7 +82,7 @@ class ConfidenceInterval:
         anchors = np.asarray(hypney.utils.eagerpy.ensure_numpy(anchors))
         if not user_gave_anchors and hasattr(self.stat, "bestfit"):
             # Add bestfit of POI as an anchor
-            anchors = np.concatenate(anchors, self.stat.bestfit[poi])
+            anchors = np.concatenate([anchors, [self.stat.bestfit[poi]]])
         self.anchors = np.sort(anchors)
 
         # +1 for upper limit on statistic that (on large scales)

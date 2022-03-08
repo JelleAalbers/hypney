@@ -8,3 +8,4 @@ from .reparametrized import *
 from .transform_data import *
 from .cut import *
 from .interpolation import *
+from .ppf_from_samples import *

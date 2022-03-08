@@ -209,10 +209,6 @@ class Statistic:
         """
         if options is None:
             options = dict()
-        # Use a *lot* of bins by default, since we're most interested
-        # in the cdf/ppf
-        options.setdefault("bin_count_multiplier", 10)
-        options.setdefault("mass_bins", True)
 
         # Set defaults before simulation; helps provide e.g. better minimizer guesses
         self = self.set(params=params, **kwargs)
@@ -229,7 +225,7 @@ class Statistic:
             simulate_from_model=simulate_from_model,
         )
 
-        dist = hypney.models.from_samples(toys, **options)
+        dist = hypney.models.ppf_from_samples(toys, **options)
         # Remove all parameters (to avoid confusion with model parameters)
         return dist.freeze()
 

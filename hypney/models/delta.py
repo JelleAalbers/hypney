@@ -21,7 +21,8 @@ class DiracDelta(hypney.Model):
         return 0 * self.quantiles + params["loc"]
 
     def _rvs(self, size: int, params: dict) -> np.ndarray:
-        return np.ones((size, 1)) * params["loc"]
+        # Note .raw here; want to return numpy array, not eagerpy tensor
+        return np.ones((size, 1)) * params["loc"].raw
 
     def _mean(self, params):
         return params["loc"]
