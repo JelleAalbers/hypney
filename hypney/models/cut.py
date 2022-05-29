@@ -73,7 +73,7 @@ class CutModel(hypney.WrappedModel):
 
         # Compute which events pass cut
         # Start with all passed
-        passed = (1 + 0 * self.data[:, 0]) > 0
+        passed = self.data.ones(len(self.data)) > 0
         if self._cut == NoCut:
             return passed
         for dim_i, (l, r) in enumerate(self._cut):
