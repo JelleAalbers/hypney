@@ -3,7 +3,9 @@
 i.e. the original optimum interval method.
 """
 import gzip
+import inspect
 import pickle
+import os.path
 from pathlib import Path
 
 import numpy as np
@@ -16,11 +18,12 @@ from .deficit_hawks import AllRegionFullHawk, AllRegionSimpleHawk
 
 export, __all__ = hypney.exporter()
 
+# Path to file with a histogram of the C_n distribution (up to N=150)
+current_dir = os.path.dirname(os.path.abspath(
+    inspect.getfile(inspect.currentframe())))
+cn_cdf_file = Path(current_dir).parent / "data" / "cn_cdf.pkl.gz"
 
-# TODO: where to store file in repo?
-cn_cdf_file = "/home/jaalbers/Documents/projects/robust_inference_2/cn_cdf.pkl.gz"
-
-if Path(cn_cdf_file).exists():
+if cn_cdf_file.exists():
     with gzip.open(cn_cdf_file) as f:
         mh = pickle.load(f)
 
@@ -40,6 +43,7 @@ if Path(cn_cdf_file).exists():
     itp_max_mu = mh.bin_centers("mu").max()
 
 else:
+    # Don't complain at import time, exception will be raised later
     p_smaller_x_itp = None
 
 
@@ -72,6 +76,8 @@ def p_smaller_itv(n, mu, frac):
     except ValueError:
         print(f"Error interpolating at {points}, mu={mu}, n={n}, frac={frac}")
         raise
+    # Ensure probability is in (0, 1); extrapolations sometimes give errors
+    # result = result.clip(0, 1)
     result = result.reshape(mu.shape)
     if was_float:
         return result.item()
